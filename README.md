@@ -4,6 +4,10 @@ Sistema web proposto para centralizar e automatizar a solicitação, aprovação
 
 > **Status:** Fase 1 — levantamento de requisitos e desenho da solução. O repositório ainda não contém uma aplicação executável.
 
+## Documentação da Fase 1
+
+Os artefatos em preparação para a primeira entrega estão organizados em [`entrega-fase-1/`](entrega-fase-1/README.md). A pasta contém o documento principal, o roteiro do vídeo, a relação de protótipos e os anexos de levantamento e acesso aos ambientes colaborativos.
+
 ## Contexto do problema
 
 Atualmente, o departamento possui apenas o extrato da UGR no sistema institucional. Esse extrato registra as movimentações efetivadas, mas não representa valores já comprometidos por solicitações aprovadas. A ausência desse controle dificulta saber quanto do orçamento está realmente disponível.
@@ -242,13 +246,13 @@ Essa estrutura é uma proposta inicial e deverá ser criada gradualmente, confor
 
 ## Ambientes colaborativos
 
-- **Código e revisão:** GitHub, neste repositório;
-- **Tarefas:** GitHub Projects é a ferramenta proposta, ainda pendente de configuração;
+- **Código, versionamento e revisão:** GitHub, neste repositório;
+- **Planejamento e acompanhamento das tarefas:** [Trello](https://trello.com/b/xcfNnJ1w/projeto-certificadora-de-competencia-espec%C3%ADfica);
 - **Documento da Fase 1:** ambiente compartilhado ainda pendente de definição;
 - **Protótipos:** Figma é a ferramenta proposta, ainda pendente de configuração;
 - **Comunicação:** canal do grupo ainda pendente de registro no documento da Fase 1.
 
-Os endereços, responsáveis e dados de acesso deverão ser adicionados aqui depois que os ambientes estiverem configurados.
+O quadro do Trello já está configurado. Os responsáveis e os dados necessários para acesso irrestrito ainda deverão ser registrados depois que o acesso do professor for validado.
 
 ## Fase 1
 
