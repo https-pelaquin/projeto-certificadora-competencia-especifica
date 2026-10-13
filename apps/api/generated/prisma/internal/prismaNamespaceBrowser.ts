@@ -51,7 +51,13 @@ export const AnyNull = runtime.AnyNull
 
 
 export const ModelName = {
-
+  Usuario: 'Usuario',
+  Orcamento: 'Orcamento',
+  LimiteAprovacao: 'LimiteAprovacao',
+  Categoria: 'Categoria',
+  Solicitacao: 'Solicitacao',
+  Movimentacao: 'Movimentacao',
+  Pagamento: 'Pagamento'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -68,4 +74,109 @@ export const TransactionIsolationLevel = runtime.makeStrictEnum({
 } as const)
 
 export type TransactionIsolationLevel = (typeof TransactionIsolationLevel)[keyof typeof TransactionIsolationLevel]
+
+
+export const UsuarioScalarFieldEnum = {
+  id: 'id',
+  nome: 'nome',
+  email: 'email',
+  senhaHash: 'senhaHash',
+  ativo: 'ativo',
+  criadoEm: 'criadoEm'
+} as const
+
+export type UsuarioScalarFieldEnum = (typeof UsuarioScalarFieldEnum)[keyof typeof UsuarioScalarFieldEnum]
+
+
+export const OrcamentoScalarFieldEnum = {
+  id: 'id',
+  ano: 'ano',
+  valorInicial: 'valorInicial',
+  criadoEm: 'criadoEm'
+} as const
+
+export type OrcamentoScalarFieldEnum = (typeof OrcamentoScalarFieldEnum)[keyof typeof OrcamentoScalarFieldEnum]
+
+
+export const LimiteAprovacaoScalarFieldEnum = {
+  id: 'id',
+  valor: 'valor',
+  periodoMeses: 'periodoMeses',
+  vigenteDesde: 'vigenteDesde',
+  vigenteAte: 'vigenteAte'
+} as const
+
+export type LimiteAprovacaoScalarFieldEnum = (typeof LimiteAprovacaoScalarFieldEnum)[keyof typeof LimiteAprovacaoScalarFieldEnum]
+
+
+export const CategoriaScalarFieldEnum = {
+  id: 'id',
+  nome: 'nome',
+  ativa: 'ativa'
+} as const
+
+export type CategoriaScalarFieldEnum = (typeof CategoriaScalarFieldEnum)[keyof typeof CategoriaScalarFieldEnum]
+
+
+export const SolicitacaoScalarFieldEnum = {
+  id: 'id',
+  professorId: 'professorId',
+  categoriaId: 'categoriaId',
+  orcamentoId: 'orcamentoId',
+  limiteId: 'limiteId',
+  valor: 'valor',
+  finalidade: 'finalidade',
+  status: 'status',
+  criadaEm: 'criadaEm'
+} as const
+
+export type SolicitacaoScalarFieldEnum = (typeof SolicitacaoScalarFieldEnum)[keyof typeof SolicitacaoScalarFieldEnum]
+
+
+export const MovimentacaoScalarFieldEnum = {
+  id: 'id',
+  orcamentoId: 'orcamentoId',
+  solicitacaoId: 'solicitacaoId',
+  tipo: 'tipo',
+  valor: 'valor',
+  criadaEm: 'criadaEm'
+} as const
+
+export type MovimentacaoScalarFieldEnum = (typeof MovimentacaoScalarFieldEnum)[keyof typeof MovimentacaoScalarFieldEnum]
+
+
+export const PagamentoScalarFieldEnum = {
+  id: 'id',
+  solicitacaoId: 'solicitacaoId',
+  registradoPorId: 'registradoPorId',
+  valorPago: 'valorPago',
+  justificativa: 'justificativa',
+  pagoEm: 'pagoEm'
+} as const
+
+export type PagamentoScalarFieldEnum = (typeof PagamentoScalarFieldEnum)[keyof typeof PagamentoScalarFieldEnum]
+
+
+export const SortOrder = {
+  asc: 'asc',
+  desc: 'desc'
+} as const
+
+export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const QueryMode = {
+  default: 'default',
+  insensitive: 'insensitive'
+} as const
+
+export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
 

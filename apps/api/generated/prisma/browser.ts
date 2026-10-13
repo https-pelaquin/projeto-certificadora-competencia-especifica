@@ -17,4 +17,38 @@ import * as Prisma from './internal/prismaNamespaceBrowser.ts'
 export { Prisma }
 export * as $Enums from './enums.ts'
 export * from './enums.ts';
-
+/**
+ * Model Usuario
+ * 
+ */
+export type Usuario = Prisma.UsuarioModel
+/**
+ * Model Orcamento
+ * 
+ */
+export type Orcamento = Prisma.OrcamentoModel
+/**
+ * Model LimiteAprovacao
+ * 
+ */
+export type LimiteAprovacao = Prisma.LimiteAprovacaoModel
+/**
+ * Model Categoria
+ * 
+ */
+export type Categoria = Prisma.CategoriaModel
+/**
+ * Model Solicitacao
+ * 
+ */
+export type Solicitacao = Prisma.SolicitacaoModel
+/**
+ * Model Movimentacao
+ * 
+ */
+export type Movimentacao = Prisma.MovimentacaoModel
+/**
+ * Model Pagamento
+ * 
+ */
+export type Pagamento = Prisma.PagamentoModel

@@ -9,7 +9,25 @@
 * 🟢 You can import this file directly.
 */
 
+export const StatusSolicitacao = {
+  CRIADA: 'CRIADA',
+  AGUARDANDO_COMPLEMENTO: 'AGUARDANDO_COMPLEMENTO',
+  EM_VOTACAO: 'EM_VOTACAO',
+  PROVISIONADA: 'PROVISIONADA',
+  PAGA: 'PAGA',
+  REJEITADA: 'REJEITADA',
+  CANCELADA: 'CANCELADA'
+} as const
+
+export type StatusSolicitacao = (typeof StatusSolicitacao)[keyof typeof StatusSolicitacao]
 
 
-// This file is empty because there are no enums in the schema.
-export {}
+export const TipoMovimentacao = {
+  AJUSTE_POSITIVO: 'AJUSTE_POSITIVO',
+  AJUSTE_NEGATIVO: 'AJUSTE_NEGATIVO',
+  PROVISAO: 'PROVISAO',
+  ESTORNO: 'ESTORNO',
+  UTILIZACAO: 'UTILIZACAO'
+} as const
+
+export type TipoMovimentacao = (typeof TipoMovimentacao)[keyof typeof TipoMovimentacao]
