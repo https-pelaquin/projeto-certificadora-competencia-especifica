@@ -79,6 +79,7 @@ model Solicitacao {
   categoriaId Int
   orcamentoId Int
   limiteId    Int // qual limite valia na avaliação (RN01)
+  descricao   String
   valor       Decimal           @db.Decimal(14, 2)
   finalidade  String
   status      StatusSolicitacao @default(CRIADA)
