@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17
+    container_name: dacom-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dacom
+      POSTGRES_PASSWORD: dacom
+      POSTGRES_DB: dacom
+    ports:
+      - "5433:5432"
+    volumes:
+      - dados_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dacom -d dacom"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dados_db:
