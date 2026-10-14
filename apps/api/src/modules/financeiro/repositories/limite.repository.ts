@@ -6,7 +6,7 @@ export async function criar(db: Db, dados: {
   valor: Prisma.Decimal,
   periodoMeses: number,
   vigenteDesde: Date,
-  vigenteAte: Date,
+  vigenteAte?: Date | null,
 }) {
   return await db.limiteAprovacao.create({
     data: {
@@ -27,7 +27,7 @@ export async function buscarVigente(db: Db, data: Date) {
                 },
                 {
                     vigenteAte: {
-                        gte: data,
+                        gt: data,
                     },
                 },
             ],
