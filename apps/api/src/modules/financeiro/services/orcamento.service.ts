@@ -19,7 +19,7 @@ export async function criarOrcamento(dados: {
     }
 }
 
-export async function atualizarOrcamento(orcamentoId: number, dados: {
+export async function ajustarOrcamento(orcamentoId: number, dados: {
     valor: Prisma.Decimal;
     tipo: Extract<TipoMovimentacao, "AJUSTE_POSITIVO" | "AJUSTE_NEGATIVO">;
 }) {
