@@ -126,3 +126,36 @@ Segundo o cliente, não existe atualmente um controle que represente o fluxo pro
 - Notificações internas;
 - Armazenamento dos anexos;
 - Modelo oficial usado no PDF.
+
+## Validação da proposta
+
+| Item | Informação |
+| --- | --- |
+| Meio | E-mail |
+| Data do envio | [PREENCHER] |
+| Situação | Aguardando resposta do cliente |
+| Data da resposta | [PREENCHER] |
+
+O grupo enviou ao cliente um resumo do entendimento do problema, do fluxo principal e da solução técnica, com links do documento da Fase 1 e do repositório. Foi pedida a confirmação de:
+
+- entendimento do problema atual;
+- requisitos e regras de negócio consolidados;
+- fluxo de solicitação, votação, provisionamento e pagamento;
+- protótipos e telas propostas;
+- arquitetura e tecnologias escolhidas;
+- escopo planejado para a primeira versão.
+
+O e-mail também listou os pontos a detalhar durante o desenvolvimento:
+
+- período do limite acumulado;
+- status considerados no limite;
+- edições após a aprovação;
+- campos e documentos obrigatórios;
+- votações sem votos ou só com abstenções;
+- saldo insuficiente;
+- permissões do responsável administrativo;
+- administrador separado do chefe;
+- armazenamento dos anexos;
+- modelo oficial do relatório anual.
+
+Ao receber a resposta, registrar aqui e atualizar `README.md` e `documento-fase-1.md` (seção 15).
