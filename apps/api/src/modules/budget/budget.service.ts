@@ -2,13 +2,18 @@ import { LedgerEntryType, Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../shared/prisma";
 import { actorUserId, type Actor } from "../../shared/actor";
 import { BusinessRuleError, ConflictError, NotFoundError } from "../../shared/errors";
+import * as audit from "../audit/audit.service";
 import * as budgetRepository from "./budget.repository";
 
 const ZERO = new Prisma.Decimal(0);
 
 export async function createBudget(actor: Actor, data: { year: number; initialAmount: Prisma.Decimal }) {
     try {
-        return await budgetRepository.create(prisma, { ...data, createdById: actorUserId(actor) });
+        return await prisma.$transaction(async (tx) => {
+            const budget = await budgetRepository.create(tx, { ...data, createdById: actorUserId(actor) });
+            await audit.record(tx, actor, { action: "BUDGET_CREATED", entityType: "Budget", entityId: budget.id, after: budget });
+            return budget;
+        });
     } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
             throw new ConflictError(`Já existe orçamento para o ano ${data.year}`);
@@ -36,7 +41,14 @@ export async function adjustBudget(actor: Actor, budgetId: number, data: {
             }
         }
 
-        await budgetRepository.createLedgerEntry(tx, { budgetId, ...data, createdById: actorUserId(actor) });
+        const entry = await budgetRepository.createLedgerEntry(tx, { budgetId, ...data, createdById: actorUserId(actor) });
+        await audit.record(tx, actor, {
+            action: "BUDGET_ADJUSTED",
+            entityType: "Budget",
+            entityId: budgetId,
+            after: entry,
+            justification: data.justification,
+        });
 
         return getBalance(tx, budgetId);
     });

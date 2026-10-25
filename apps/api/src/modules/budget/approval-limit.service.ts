@@ -3,6 +3,7 @@ import { prisma, type Db } from "../../shared/prisma";
 import { actorUserId, type Actor } from "../../shared/actor";
 import { BusinessRuleError } from "../../shared/errors";
 import { addMonths } from "../../shared/dates";
+import * as audit from "../audit/audit.service";
 import * as requestsService from "../requests/requests.service";
 import * as approvalLimitRepository from "./approval-limit.repository";
 
@@ -24,7 +25,15 @@ export async function createLimit(actor: Actor, data: { amount: Prisma.Decimal; 
             await approvalLimitRepository.end(tx, current.id, data.validFrom);
         }
 
-        return approvalLimitRepository.create(tx, { ...data, createdById: actorUserId(actor) });
+        const limit = await approvalLimitRepository.create(tx, { ...data, createdById: actorUserId(actor) });
+        await audit.record(tx, actor, {
+            action: "APPROVAL_LIMIT_CREATED",
+            entityType: "ApprovalLimit",
+            entityId: limit.id,
+            before: current,
+            after: limit,
+        });
+        return limit;
     });
 }
 
