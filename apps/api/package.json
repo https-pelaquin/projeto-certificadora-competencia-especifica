@@ -1,26 +1,47 @@
 {
-
+  "name": "api",
+  "private": true,
   "type": "module",
-
   "scripts": {
-  "test": "vitest run"
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc",
+    "test": "vitest run",
+    "db:migrate": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts"
   },
-
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
-    "@types/express": "^5.0.6",
+    "bcryptjs": "^3.0.3",
+    "connect-pg-simple": "^10.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.7",
     "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "nodemailer": "^10.2.1",
     "pg": "^8.23.1",
+    "playwright": "^1.64.1",
+    "swagger-ui-express": "^5.0.1",
     "tsx": "^4.23.15",
-    "typescript": "^6.0.3",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/connect-pg-simple": "*",
+    "@types/cors": "*",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "*",
     "@types/node": "^26.6.5",
+    "@types/nodemailer": "*",
     "@types/pg": "^8.23.1",
-    "dotenv": "^18.0.7",
+    "@types/supertest": "*",
+    "@types/swagger-ui-express": "*",
     "prisma": "^7.10.0",
+    "supertest": "^7.3.1",
+    "typescript": "^6.0.3",
     "vitest": "^5.0.4"
   }
 }
