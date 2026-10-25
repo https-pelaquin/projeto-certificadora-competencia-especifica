@@ -6,6 +6,7 @@ import { errorHandler, notFound } from "./middlewares/errorHandler";
 import { requestContext } from "./middlewares/requestContext";
 import { requireJson } from "./middlewares/requireJson";
 import { createAuthRouter } from "./modules/auth/auth.routes";
+import { createUsersRouter } from "./modules/users/users.routes";
 import { prisma } from "./shared/prisma";
 import { createSessionMiddleware } from "./shared/session";
 
@@ -28,6 +29,7 @@ export function createApp() {
     });
 
     app.use("/api", createAuthRouter());
+    app.use("/api", createUsersRouter());
 
     app.use(notFound);
     app.use(errorHandler);

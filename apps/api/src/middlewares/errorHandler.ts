@@ -24,8 +24,9 @@ export function errorHandler(error: unknown, req: Request, res: Response, _next:
     }
 
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === "P2002") {
-            return res.status(409).json({ error: { code: "CONFLICT", message: "Registro duplicado" } });
+        // P2002 = unique; P2039 = outras constraints do banco (ex.: exclusão de chefes sobrepostos).
+        if (error.code === "P2002" || error.code === "P2039") {
+            return res.status(409).json({ error: { code: "CONFLICT", message: "Conflito com um registro existente" } });
         }
         if (error.code === "P2025") {
             return res.status(404).json({ error: { code: "NOT_FOUND", message: "Registro não encontrado" } });
