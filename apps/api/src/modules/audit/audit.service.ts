@@ -1,7 +1,8 @@
 import { Prisma } from "../../../generated/prisma/client";
 import type { Actor } from "../../shared/actor";
-import type { Db } from "../../shared/prisma";
+import { prisma, type Db } from "../../shared/prisma";
 import * as auditRepository from "./audit.repository";
+import type { AuditFilters } from "./audit.repository";
 
 export type AuditEntry = {
     action: string;
@@ -38,4 +39,12 @@ export function record(db: Db, actor: Actor, entry: AuditEntry) {
         after: snapshot(entry.after),
         justification: entry.justification ?? null,
     });
+}
+
+export async function listAuditLogs(filters: AuditFilters, page: number, pageSize: number) {
+    const [items, total] = await Promise.all([
+        auditRepository.list(prisma, filters, { skip: (page - 1) * pageSize, take: pageSize }),
+        auditRepository.count(prisma, filters),
+    ]);
+    return { items, page, pageSize, total };
 }

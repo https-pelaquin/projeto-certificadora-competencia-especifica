@@ -5,6 +5,7 @@ import { env } from "./config/env";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
 import { requestContext } from "./middlewares/requestContext";
 import { requireJson } from "./middlewares/requireJson";
+import { createAuditRouter } from "./modules/audit/audit.routes";
 import { createAuthRouter } from "./modules/auth/auth.routes";
 import { createUsersRouter } from "./modules/users/users.routes";
 import { prisma } from "./shared/prisma";
@@ -30,6 +31,7 @@ export function createApp() {
 
     app.use("/api", createAuthRouter());
     app.use("/api", createUsersRouter());
+    app.use("/api", createAuditRouter());
 
     app.use(notFound);
     app.use(errorHandler);
