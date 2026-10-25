@@ -8,6 +8,7 @@ import { requireJson } from "./middlewares/requireJson";
 import { createAuditRouter } from "./modules/audit/audit.routes";
 import { createAuthRouter } from "./modules/auth/auth.routes";
 import { createUsersRouter } from "./modules/users/users.routes";
+import { createVotingsRouter } from "./modules/votings/votings.routes";
 import { prisma } from "./shared/prisma";
 import { createSessionMiddleware } from "./shared/session";
 
@@ -32,6 +33,7 @@ export function createApp() {
     app.use("/api", createAuthRouter());
     app.use("/api", createUsersRouter());
     app.use("/api", createAuditRouter());
+    app.use("/api", createVotingsRouter());
 
     app.use(notFound);
     app.use(errorHandler);

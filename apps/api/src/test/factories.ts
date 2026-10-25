@@ -1,6 +1,6 @@
 import request from "supertest";
 import type { Express } from "express";
-import type { Role } from "../../generated/prisma/client";
+import { Prisma, type RequestStatus, type Role } from "../../generated/prisma/client";
 import { prisma } from "../shared/prisma";
 import { hashPassword } from "../modules/auth/auth.service";
 
@@ -31,4 +31,29 @@ export async function loginAs(app: Express, user: { email: string }, password = 
         throw new Error(`login falhou: ${res.status} ${JSON.stringify(res.body)}`);
     }
     return agent;
+}
+
+// Monta orçamento, limite e categoria quando ainda não existem e cria a solicitação direto no status pedido.
+export async function createRequest(options: { requesterId: number; amount?: string; status?: RequestStatus; budget?: string }) {
+    const year = new Date().getUTCFullYear();
+    const budget = await prisma.budget.upsert({
+        where: { year },
+        update: {},
+        create: { year, initialAmount: new Prisma.Decimal(options.budget ?? "10000.00") },
+    });
+    const limit = (await prisma.approvalLimit.findFirst())
+        ?? (await prisma.approvalLimit.create({ data: { amount: new Prisma.Decimal("1000.00"), periodMonths: 12, validFrom: new Date(0) } }));
+    const category = await prisma.expenseCategory.upsert({ where: { name: "Eventos" }, update: {}, create: { name: "Eventos" } });
+
+    return prisma.request.create({
+        data: {
+            requesterId: options.requesterId,
+            categoryId: category.id,
+            budgetId: budget.id,
+            approvalLimitId: limit.id,
+            description: "Participação em congresso",
+            amount: new Prisma.Decimal(options.amount ?? "2500.00"),
+            status: options.status ?? "AWAITING_VOTING",
+        },
+    });
 }
