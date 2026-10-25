@@ -6,6 +6,10 @@ import { hashPassword } from "../modules/auth/auth.service";
 
 export const PASSWORD = "senha-segura-123";
 
+// Datas longe de "agora": o relógio do WSL2 às vezes volta dezenas de segundos e quebraria vigências recentes.
+export const LONG_AGO = new Date("2020-01-01T00:00:00Z");
+export const DAY = 24 * 60 * 60_000;
+
 let sequence = 0;
 
 export async function createUser(options: { roles?: Role[]; name?: string; email?: string; password?: string | null; active?: boolean } = {}) {
@@ -18,7 +22,7 @@ export async function createUser(options: { roles?: Role[]; name?: string; email
             passwordHash: password === null ? null : await hashPassword(password),
             active: options.active ?? true,
             roleAssignments: {
-                create: (options.roles ?? ["PROFESSOR"]).map((role) => ({ role, startsAt: new Date(Date.now() - 60_000) })),
+                create: (options.roles ?? ["PROFESSOR"]).map((role) => ({ role, startsAt: LONG_AGO })),
             },
         },
     });

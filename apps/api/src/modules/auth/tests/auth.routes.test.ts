@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../../app";
 import { prisma } from "../../../shared/prisma";
 import { resetDatabase } from "../../../test/db";
-import { createUser, loginAs, PASSWORD } from "../../../test/factories";
+import { createUser, DAY, loginAs, PASSWORD } from "../../../test/factories";
 
 const app = createApp();
 
@@ -68,7 +68,7 @@ describe("login, me e logout", () => {
         const user = await createUser({ roles: ["PROFESSOR", "HEAD"] });
         const agent = await loginAs(app, user);
 
-        await prisma.roleAssignment.updateMany({ where: { userId: user.id, role: "HEAD" }, data: { endsAt: new Date() } });
+        await prisma.roleAssignment.updateMany({ where: { userId: user.id, role: "HEAD" }, data: { endsAt: new Date(Date.now() - DAY) } });
         expect((await agent.get("/api/auth/me")).body.roles).toEqual(["PROFESSOR"]);
 
         await prisma.user.update({ where: { id: user.id }, data: { active: false } });
@@ -120,7 +120,7 @@ describe("redefinição de senha", () => {
         const user = await createUser();
         await request(app).post("/api/auth/password/forgot").send({ email: user.email });
         const token = await resetTokenFor(user.email);
-        await prisma.passwordToken.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+        await prisma.passwordToken.updateMany({ data: { expiresAt: new Date(Date.now() - DAY) } });
 
         const res = await request(app).post("/api/auth/password/reset").send({ token, password: "nova-senha-456" });
         expect(res.status).toBe(422);

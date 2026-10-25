@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../../../app";
 import { prisma } from "../../../shared/prisma";
 import { resetDatabase } from "../../../test/db";
-import { createRequest, createUser, loginAs } from "../../../test/factories";
+import { createRequest, createUser, DAY, loginAs } from "../../../test/factories";
 import { cancelForRequest, closeExpiredVotings, tallyResult } from "../votings.service";
 
 const app = createApp();
@@ -99,7 +99,7 @@ describe("voto", () => {
     it("voto após o prazo responde 422", async () => {
         const s = await scenario();
         const votingId = await openVoting(s);
-        await prisma.voting.update({ where: { id: votingId }, data: { deadline: new Date(Date.now() - 1000) } });
+        await prisma.voting.update({ where: { id: votingId }, data: { deadline: new Date(Date.now() - DAY) } });
         expect((await vote(s.members[0]!, votingId, "APPROVE")).status).toBe(422);
     });
 });
