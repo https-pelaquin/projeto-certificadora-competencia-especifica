@@ -1,6 +1,6 @@
 # Arquitetura da solução
 
-> **Status:** proposta consolidada em 2026-10-17 — aguardando validação do grupo (em especial da Pessoa 1, dona do módulo financeiro).
+> **Status:** consolidada em 2026-10-17 e validada pelo grupo. Implementação do backend descrita em [`../guia-backend.md`](../guia-backend.md), incluindo as diferenças em relação a este documento.
 > Itens marcados **[VALIDAR]** dependem do cliente: o sistema adota o padrão indicado até a resposta, e a regra fica isolada para ser trocada sem refazer o modelo.
 >
 > Detalhamento dos módulos de processos (auth, usuários, votação, auditoria, notificações, relatórios): [`backend-processos.md`](backend-processos.md).
@@ -462,6 +462,8 @@ Garantias no banco:
 - Funções com regra de tempo recebem `now` como parâmetro.
 
 ## 13. Alinhamento do código existente
+
+> **Concluído em 2026-10-25:** schema e migration recriados em inglês; código da Pessoa 1 portado para `modules/budget` e `modules/requests`; pnpm workspaces em uso.
 
 O código atual (`apps/api`, Pessoa 1) segue a direção correta: ledger, lock no orçamento, CHECK, trigger e repositórios com `tx`. Mudanças para chegar a este documento:
 

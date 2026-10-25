@@ -1,6 +1,6 @@
 # Arquitetura do backend de processos (Pessoa 2)
 
-> **Status: aprovado pela Pessoa 2 — aguardando validação do grupo.**
+> **Status: aprovado pelo grupo e implementado** (2026-10-25). Guia do código: [`../guia-backend.md`](../guia-backend.md).
 >
 > | Parte | Conteúdo | Situação |
 > | --- | --- | --- |
