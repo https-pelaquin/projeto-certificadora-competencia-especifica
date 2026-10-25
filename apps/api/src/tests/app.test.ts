@@ -27,3 +27,9 @@ it("JSON malformado responde 400", async () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("INVALID_JSON");
 });
+
+it("aceita POST sem corpo com ou sem Content-Type JSON", async () => {
+    expect((await request(app).post("/api/auth/logout")).status).toBe(204);
+    expect((await request(app).post("/api/auth/logout").set("Content-Type", "application/json")).status).toBe(204);
+    expect((await request(app).post("/api/auth/logout").set("Content-Type", "text/plain")).status).toBe(415);
+});
