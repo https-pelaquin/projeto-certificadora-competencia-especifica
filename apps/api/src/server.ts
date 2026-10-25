@@ -1,5 +1,6 @@
 import { createApp } from "./app";
 import { startJobs } from "./jobs";
+import { closeBrowser } from "./modules/reports/reports.service";
 import { env } from "./config/env";
 import { log } from "./shared/logger";
 import { prisma } from "./shared/prisma";
@@ -13,6 +14,7 @@ async function shutdown(signal: string) {
     log("info", `encerrando (${signal})`);
     stopJobs();
     server.close();
+    await closeBrowser();
     await prisma.$disconnect();
     process.exit(0);
 }

@@ -7,6 +7,7 @@ import { requestContext } from "./middlewares/requestContext";
 import { requireJson } from "./middlewares/requireJson";
 import { createAuditRouter } from "./modules/audit/audit.routes";
 import { createAuthRouter } from "./modules/auth/auth.routes";
+import { createReportsRouter } from "./modules/reports/reports.routes";
 import { createUsersRouter } from "./modules/users/users.routes";
 import { createVotingsRouter } from "./modules/votings/votings.routes";
 import { prisma } from "./shared/prisma";
@@ -34,6 +35,7 @@ export function createApp() {
     app.use("/api", createUsersRouter());
     app.use("/api", createAuditRouter());
     app.use("/api", createVotingsRouter());
+    app.use("/api", createReportsRouter());
 
     app.use(notFound);
     app.use(errorHandler);
