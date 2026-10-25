@@ -33,3 +33,15 @@ it("aceita POST sem corpo com ou sem Content-Type JSON", async () => {
     expect((await request(app).post("/api/auth/logout").set("Content-Type", "application/json")).status).toBe(204);
     expect((await request(app).post("/api/auth/logout").set("Content-Type", "text/plain")).status).toBe(415);
 });
+
+it("publica o contrato OpenAPI e o Swagger UI", async () => {
+    const res = await request(app).get("/api/docs/openapi.json");
+    expect(res.status).toBe(200);
+    expect(res.body.openapi).toBe("3.1.0");
+    expect(res.body.paths["/api/votings/{id}/votes"].post.requestBody.content["application/json"].schema.properties.choice.enum)
+        .toEqual(["APPROVE", "REJECT", "ABSTAIN"]);
+
+    const ui = await request(app).get("/api/docs/").redirects(1);
+    expect(ui.status).toBe(200);
+    expect(ui.text).toContain("swagger-ui");
+});

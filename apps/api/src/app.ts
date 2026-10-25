@@ -1,6 +1,8 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
+import swaggerUi from "swagger-ui-express";
+import { buildOpenApiDocument } from "./docs/openapi";
 import { env } from "./config/env";
 import { errorHandler, notFound } from "./middlewares/errorHandler";
 import { requestContext } from "./middlewares/requestContext";
@@ -30,6 +32,10 @@ export function createApp() {
         await prisma.$queryRaw`SELECT 1`;
         res.json({ status: "ok" });
     });
+
+    const openApi = buildOpenApiDocument();
+    app.get("/api/docs/openapi.json", (_req, res) => res.json(openApi));
+    app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApi));
 
     app.use("/api", createAuthRouter());
     app.use("/api", createUsersRouter());
