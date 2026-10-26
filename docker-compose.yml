@@ -17,5 +17,34 @@ services:
       timeout: 5s
       retries: 10
 
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: dacom-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # interface web
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: dacom-api
+    env_file: apps/api/.env
+    environment:
+      DATABASE_URL: postgresql://dacom:dacom@db:5432/dacom
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+    command: sh -c "pnpm db:migrate && pnpm dev"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
 volumes:
   dados_db:

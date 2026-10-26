@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -12,115 +7,341 @@ datasource db {
   provider = "postgresql"
 }
 
-
-
-enum StatusSolicitacao {
-  CRIADA
-  AGUARDANDO_COMPLEMENTO
-  EM_VOTACAO
-  PROVISIONADA
-  PAGA
-  REJEITADA
-  CANCELADA
+enum Role {
+  PROFESSOR
+  HEAD
+  COUNCIL_MEMBER
+  FINANCIAL_ADMIN
 }
 
-enum TipoMovimentacao {
-  AJUSTE_POSITIVO
-  AJUSTE_NEGATIVO
-  PROVISAO
-  ESTORNO
-  UTILIZACAO
+enum PasswordTokenPurpose {
+  INVITE
+  RESET
 }
 
-
-model Usuario {
-  id        Int      @id @default(autoincrement())
-  nome      String
-  email     String   @unique
-  senhaHash String
-  ativo     Boolean  @default(true)
-  criadoEm  DateTime @default(now())
-
-  solicitacoes Solicitacao[]
-  pagamentos   Pagamento[]
+enum RequestStatus {
+  AWAITING_VOTING
+  AWAITING_COMPLEMENT
+  AWAITING_BALANCE
+  IN_VOTING
+  PROVISIONED
+  PAID
+  REJECTED
+  CANCELED
 }
 
-model Orcamento {
+enum LedgerEntryType {
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+  PROVISION
+  RELEASE
+  SPEND
+}
+
+enum VotingStatus {
+  OPEN
+  AWAITING_TIE_BREAK
+  CLOSED
+  CANCELED
+}
+
+enum VotingResult {
+  APPROVED
+  REJECTED
+}
+
+enum VoteChoice {
+  APPROVE
+  REJECT
+  ABSTAIN
+}
+
+enum TieBreakChoice {
+  APPROVE
+  REJECT
+}
+
+enum ActorType {
+  USER
+  SYSTEM
+}
+
+enum EmailStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
   id           Int      @id @default(autoincrement())
-  ano          Int      @unique
-  valorInicial Decimal  @db.Decimal(14, 2)
-  criadoEm     DateTime @default(now())
+  name         String
+  email        String   @unique // sempre minúsculo (normalizado no service)
+  passwordHash String? // nulo até aceitar o convite
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
 
-  solicitacoes  Solicitacao[]
-  movimentacoes Movimentacao[]
+  roleAssignments     RoleAssignment[]       @relation("assignee")
+  assignedRoles       RoleAssignment[]       @relation("assigner")
+  passwordTokens      PasswordToken[]
+  requests            Request[]
+  budgetsCreated      Budget[]
+  limitsCreated       ApprovalLimit[]
+  ledgerEntries       LedgerEntry[]
+  paymentsRecorded    Payment[]
+  complementRequests  ComplementRequest[]
+  votingsOpened       Voting[]
+  votingEligibilities VotingEligibleMember[]
+  tieBreaks           TieBreak[]
+  votingComments      VotingComment[]
+  auditLogs           AuditLog[]
 }
 
-model LimiteAprovacao {
+model RoleAssignment {
   id           Int       @id @default(autoincrement())
-  valor        Decimal   @db.Decimal(14, 2)
-  periodoMeses Int
-  vigenteDesde DateTime
-  vigenteAte   DateTime? // null = ainda vigente
+  userId       Int
+  role         Role
+  startsAt     DateTime  @db.Timestamptz(3)
+  endsAt       DateTime? @db.Timestamptz(3) // nulo = vigente
+  assignedById Int? // nulo = seed
 
-  solicitacoes Solicitacao[]
+  user       User  @relation("assignee", fields: [userId], references: [id], onDelete: Restrict)
+  assignedBy User? @relation("assigner", fields: [assignedById], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([role])
 }
 
-model Categoria {
-  id    Int     @id @default(autoincrement())
-  nome  String  @unique
-  ativa Boolean @default(true)
+model PasswordToken {
+  id        Int                  @id @default(autoincrement())
+  userId    Int
+  tokenHash String               @unique
+  purpose   PasswordTokenPurpose
+  expiresAt DateTime             @db.Timestamptz(3)
+  usedAt    DateTime?            @db.Timestamptz(3)
+  createdAt DateTime             @default(now()) @db.Timestamptz(3)
 
-  solicitacoes Solicitacao[]
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
 }
 
-model Solicitacao {
-  id          Int               @id @default(autoincrement())
-  professorId Int
-  categoriaId Int
-  orcamentoId Int
-  limiteId    Int // qual limite valia na avaliação (RN01)
-  descricao   String
-  valor       Decimal           @db.Decimal(14, 2)
-  finalidade  String
-  status      StatusSolicitacao @default(CRIADA)
-  criadaEm    DateTime          @default(now())
+model Budget {
+  id            Int      @id @default(autoincrement())
+  year          Int      @unique
+  initialAmount Decimal  @db.Decimal(14, 2)
+  createdById   Int?
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
 
-  professor Usuario         @relation(fields: [professorId], references: [id])
-  categoria Categoria       @relation(fields: [categoriaId], references: [id])
-  orcamento Orcamento       @relation(fields: [orcamentoId], references: [id])
-  limite    LimiteAprovacao @relation(fields: [limiteId], references: [id])
+  createdBy     User?         @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  requests      Request[]
+  ledgerEntries LedgerEntry[]
+}
 
-  movimentacoes Movimentacao[]
-  pagamento     Pagamento?
+model ApprovalLimit {
+  id           Int       @id @default(autoincrement())
+  amount       Decimal   @db.Decimal(14, 2)
+  periodMonths Int
+  validFrom    DateTime  @db.Timestamptz(3)
+  validUntil   DateTime? @db.Timestamptz(3) // nulo = vigente
+  createdById  Int?
 
-  @@index([professorId, criadaEm]) // consulta do acumulado por professor
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  requests  Request[]
+}
+
+model ExpenseCategory {
+  id     Int     @id @default(autoincrement())
+  name   String  @unique
+  active Boolean @default(true)
+
+  requests Request[]
+}
+
+model Request {
+  id              Int           @id @default(autoincrement())
+  requesterId     Int
+  categoryId      Int
+  budgetId        Int
+  approvalLimitId Int // limite vigente na avaliação
+  description     String
+  amount          Decimal       @db.Decimal(14, 2)
+  status          RequestStatus
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+
+  requester          User                @relation(fields: [requesterId], references: [id], onDelete: Restrict)
+  category           ExpenseCategory     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  budget             Budget              @relation(fields: [budgetId], references: [id], onDelete: Restrict)
+  approvalLimit      ApprovalLimit       @relation(fields: [approvalLimitId], references: [id], onDelete: Restrict)
+  ledgerEntries      LedgerEntry[]
+  payment            Payment?
+  complementRequests ComplementRequest[]
+  votings            Voting[]
+
+  @@index([requesterId, createdAt]) // acumulado por professor
   @@index([status])
 }
 
-// Append-only: nunca UPDATE nem DELETE. valor é sempre > 0 (CHECK na migration).
-model Movimentacao {
-  id            Int              @id @default(autoincrement())
-  orcamentoId   Int
-  solicitacaoId Int? // null nos ajustes manuais
-  tipo          TipoMovimentacao
-  valor         Decimal          @db.Decimal(14, 2)
-  criadaEm      DateTime         @default(now())
+// Só inclusão: trigger recusa UPDATE/DELETE; amount > 0 e o efeito vem do type.
+model LedgerEntry {
+  id            Int             @id @default(autoincrement())
+  budgetId      Int
+  requestId     Int? // nulo em ajuste manual
+  type          LedgerEntryType
+  amount        Decimal         @db.Decimal(14, 2)
+  justification String?
+  createdById   Int? // nulo = sistema
+  createdAt     DateTime        @default(now()) @db.Timestamptz(3)
 
-  orcamento   Orcamento    @relation(fields: [orcamentoId], references: [id])
-  solicitacao Solicitacao? @relation(fields: [solicitacaoId], references: [id])
+  budget    Budget   @relation(fields: [budgetId], references: [id], onDelete: Restrict)
+  request   Request? @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  createdBy User?    @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
-  @@index([orcamentoId, tipo])
-  @@index([solicitacaoId])
+  @@index([budgetId, type])
+  @@index([requestId])
 }
 
-model Pagamento {
-  id              Int      @id @default(autoincrement())
-  solicitacaoId   Int      @unique // garante 1 pagamento por solicitação (idempotência)
-  registradoPorId Int
-  valorPago       Decimal  @db.Decimal(14, 2)
-  justificativa   String? // obrigatória se valorPago != provisionado (RN15), validada no service
-  pagoEm          DateTime @default(now())
+model Payment {
+  id            Int      @id @default(autoincrement())
+  requestId     Int      @unique // um pagamento por solicitação
+  recordedById  Int
+  paidAmount    Decimal  @db.Decimal(14, 2)
+  justification String? // obrigatória se diferente do provisionado (validada no service)
+  paidAt        DateTime @default(now()) @db.Timestamptz(3)
 
-  solicitacao   Solicitacao @relation(fields: [solicitacaoId], references: [id])
-  registradoPor Usuario     @relation(fields: [registradoPorId], references: [id])
+  request    Request @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  recordedBy User    @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+}
+
+model ComplementRequest {
+  id            Int      @id @default(autoincrement())
+  requestId     Int
+  requestedById Int
+  message       String
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  request     Request @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  requestedBy User    @relation(fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([requestId])
+}
+
+// Índice único parcial (SQL): no máximo uma votação OPEN/AWAITING_TIE_BREAK por solicitação.
+model Voting {
+  id           Int           @id @default(autoincrement())
+  requestId    Int
+  openedById   Int
+  openedAt     DateTime      @default(now()) @db.Timestamptz(3)
+  deadline     DateTime      @db.Timestamptz(3)
+  status       VotingStatus  @default(OPEN)
+  result       VotingResult?
+  approveCount Int?
+  rejectCount  Int?
+  abstainCount Int?
+  closedAt     DateTime?     @db.Timestamptz(3)
+
+  request         Request                @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  openedBy        User                   @relation(fields: [openedById], references: [id], onDelete: Restrict)
+  eligibleMembers VotingEligibleMember[]
+  tieBreak        TieBreak?
+  comments        VotingComment[]
+
+  @@index([status, deadline])
+  @@index([requestId])
+}
+
+model VotingEligibleMember {
+  votingId Int
+  userId   Int
+
+  voting Voting @relation(fields: [votingId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  vote   Vote?
+
+  @@id([votingId, userId])
+  @@index([userId])
+}
+
+// PK (votingId, userId) = um voto por convocado; FK garante que só convocado vota.
+model Vote {
+  votingId  Int
+  userId    Int
+  choice    VoteChoice
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+
+  member VotingEligibleMember @relation(fields: [votingId, userId], references: [votingId, userId], onDelete: Restrict)
+
+  @@id([votingId, userId])
+}
+
+model TieBreak {
+  votingId  Int            @id
+  headId    Int
+  choice    TieBreakChoice
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+
+  voting Voting @relation(fields: [votingId], references: [id], onDelete: Restrict)
+  head   User   @relation(fields: [headId], references: [id], onDelete: Restrict)
+}
+
+model VotingComment {
+  id        Int      @id @default(autoincrement())
+  votingId  Int
+  authorId  Int
+  body      String   @db.VarChar(2000)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  voting Voting @relation(fields: [votingId], references: [id], onDelete: Restrict)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([votingId, createdAt])
+}
+
+// Só inclusão: trigger recusa UPDATE/DELETE.
+model AuditLog {
+  id            Int       @id @default(autoincrement())
+  occurredAt    DateTime  @default(now()) @db.Timestamptz(3)
+  actorType     ActorType
+  actorId       Int?
+  job           String? // nome da rotina quando actorType = SYSTEM
+  action        String
+  entityType    String
+  entityId      String
+  before        Json?
+  after         Json?
+  justification String?
+  ip            String?
+  requestId     String?
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([occurredAt])
+}
+
+model EmailOutbox {
+  id            Int         @id @default(autoincrement())
+  dedupeKey     String      @unique
+  toEmail       String
+  template      String
+  data          Json
+  status        EmailStatus @default(PENDING)
+  attempts      Int         @default(0)
+  nextAttemptAt DateTime    @default(now()) @db.Timestamptz(3)
+  lastError     String?
+  sentAt        DateTime?   @db.Timestamptz(3)
+  createdAt     DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@index([status, nextAttemptAt])
+}
+
+// Formato exigido pelo connect-pg-simple.
+model Session {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
 }

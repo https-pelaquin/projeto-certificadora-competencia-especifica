@@ -1,0 +1,7 @@
+**/node_modules
+**/generated
+**/.env
+.git
+entrega-fase-1
+entrega-fase-2
+estudo

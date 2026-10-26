@@ -2,7 +2,7 @@
 
 Sistema web proposto para centralizar e automatizar a solicitação, aprovação, provisionamento, utilização e prestação de contas dos recursos financeiros do DACOM.
 
-> **Status:** Fase 1 — levantamento de requisitos e desenho da solução. O repositório ainda não contém uma aplicação executável.
+> **Status:** Fase 2 — desenvolvimento. A API (`apps/api`) já é executável: banco de dados, autenticação, usuários e perfis, auditoria, notificações por e-mail, votações e relatório anual em PDF. Solicitações, pagamentos e o frontend estão em desenvolvimento.
 
 ## Documentação da Fase 1
 
@@ -218,7 +218,7 @@ compose.yaml
 pnpm-workspace.yaml
 ```
 
-Essa estrutura é uma proposta inicial e deverá ser criada gradualmente, conforme as primeiras funcionalidades forem implementadas.
+Essa estrutura foi a proposta inicial. A estrutura atual da API está em [`docs/guia-backend.md`](docs/guia-backend.md#4-mapa-de-arquivos).
 
 ## Entrada, saída e interoperabilidade
 
@@ -287,7 +287,21 @@ Todos os cinco integrantes devem aparecer e apresentar uma parte da proposta. A 
 
 ## Execução local
 
-As instruções de instalação e execução serão adicionadas quando o frontend, o backend e o ambiente Docker forem inicializados.
+```bash
+corepack enable
+pnpm install
+cp apps/api/.env.example apps/api/.env   # preencher SESSION_SECRET e SEED_HEAD_*
+docker compose up -d db mailpit
+pnpm --filter api db:generate
+pnpm --filter api db:migrate
+pnpm --filter api db:seed
+pnpm dev                                 # API em http://localhost:3000/api
+pnpm test                                # testes contra PostgreSQL real
+```
+
+- Documentação da API (Swagger UI): `http://localhost:3000/api/docs`.
+- E-mails de desenvolvimento (Mailpit): `http://localhost:8025`.
+- Guia do backend, com o papel de cada arquivo, as regras implementadas e os contratos entre módulos: [`docs/guia-backend.md`](docs/guia-backend.md).
 
 ## Documentação viva
 
