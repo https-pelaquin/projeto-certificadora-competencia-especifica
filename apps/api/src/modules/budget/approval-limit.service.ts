@@ -16,13 +16,17 @@ export async function createLimit(actor: Actor, data: { amount: Prisma.Decimal; 
     }
 
     return prisma.$transaction(async (tx) => {
-        const current = await approvalLimitRepository.findValidAt(tx, data.validFrom);
+        await approvalLimitRepository.lockWrites(tx);
 
-        if (current && data.validFrom <= current.validFrom) {
-            throw new BusinessRuleError("O novo limite deve começar depois do início do limite vigente");
+        // Compara com o limite de início mais recente, e não com o vigente na data nova:
+        // senão uma data dentro do período de um limite antigo reescreveria o passado.
+        const latest = await approvalLimitRepository.findLatest(tx);
+
+        if (latest && data.validFrom <= latest.validFrom) {
+            throw new BusinessRuleError("O novo limite deve começar depois do início do último limite cadastrado");
         }
-        if (current) {
-            await approvalLimitRepository.end(tx, current.id, data.validFrom);
+        if (latest && (latest.validUntil === null || latest.validUntil > data.validFrom)) {
+            await approvalLimitRepository.end(tx, latest.id, data.validFrom);
         }
 
         const limit = await approvalLimitRepository.create(tx, { ...data, createdById: actorUserId(actor) });
@@ -30,11 +34,15 @@ export async function createLimit(actor: Actor, data: { amount: Prisma.Decimal; 
             action: "APPROVAL_LIMIT_CREATED",
             entityType: "ApprovalLimit",
             entityId: limit.id,
-            before: current,
+            before: latest,
             after: limit,
         });
         return limit;
     });
+}
+
+export function listLimits() {
+    return approvalLimitRepository.list(prisma);
 }
 
 // Janela móvel de periodMonths contada a partir de `now`.

@@ -17,8 +17,8 @@ Guia de referência para integrantes e agentes que forem trabalhar na API. Expli
 | Votações, desempate, comentários, rotina de encerramento | Pronto (P2) |
 | Relatório anual em PDF | Pronto (P2), template provisório |
 | OpenAPI + Swagger UI, Docker Compose, GitHub Actions | Pronto (P2) |
-| Orçamento, saldo e limite (serviços) | Portado do código da P1, sem rotas HTTP |
-| Solicitações, categorias, pagamentos, complementação, dashboard | **A fazer (P1)**: só existem os contratos usados pela votação |
+| Orçamento, saldo e limite de aprovação | Pronto (P1), com rotas |
+| Categorias, solicitações (avaliação automática, edição, cancelamento, complementação), pagamentos e dashboard | Pronto (P1), com rotas e e-mails |
 | Frontend (`apps/web`) | A fazer (P3–P5) |
 
 ## 2. Como rodar
@@ -116,10 +116,11 @@ apps/api/
             actor.ts           tipo Actor (USER ou SYSTEM) usado na auditoria
             logger.ts          log técnico em JSON
             dates.ts           addMonths (janela do limite, mandato do chefe)
-            schemas.ts         idParam, isoDateTime
+            schemas.ts         idParam, isoDateTime, money/positiveMoney (dinheiro só como texto) e pagination
+            money.ts           moneyOut/balanceOut: dinheiro sai da API como texto com 2 casas
         types/express.d.ts     req.user, req.requestId e session.userId
         modules/               um diretório por domínio (seção 6)
-        test/                  infraestrutura de testes (global-setup, resetDatabase, factories)
+        test/                  infraestrutura de testes (global-setup, resetDatabase, factories, finance)
         tests/app.test.ts      testes da fundação (health, 404, JSON, OpenAPI)
 ```
 
@@ -194,7 +195,7 @@ Garantias:
 - Ações gravadas hoje:
   - acesso: `LOGIN`, `INVITE_ACCEPTED`, `PASSWORD_RESET`;
   - usuários: `USER_INVITED`, `INVITE_RESENT`, `USER_UPDATED`, `ROLE_ASSIGNED`, `ROLE_ENDED`, `USER_SEEDED`;
-  - financeiro: `BUDGET_CREATED`, `BUDGET_ADJUSTED`, `APPROVAL_LIMIT_CREATED`, `REQUEST_STATUS_CHANGED`;
+  - financeiro: `BUDGET_CREATED`, `BUDGET_ADJUSTED`, `APPROVAL_LIMIT_CREATED`, `CATEGORY_CREATED`, `CATEGORY_UPDATED`, `REQUEST_CREATED`, `REQUEST_UPDATED`, `REQUEST_STATUS_CHANGED`, `COMPLEMENT_REQUESTED`, `PAYMENT_RECORDED`;
   - votação: `VOTING_OPENED`, `VOTE_CAST`, `VOTING_TIED`, `TIE_BREAK_CAST`, `VOTING_CLOSED`, `VOTING_CANCELED`, `VOTING_COMMENT_ADDED`;
   - relatórios: `REPORT_GENERATED`.
 
@@ -206,7 +207,7 @@ Garantias:
   - reagenda as falhas em 1 min, 5 min, 30 min, 2 h e 12 h;
   - na 6ª falha, marca `FAILED` e guarda o erro em `lastError`.
 - Garantia "pelo menos uma vez": se o processo cair entre o envio e o commit, o e-mail pode sair duas vezes.
-- Templates: `INVITE`, `PASSWORD_RESET`, `VOTING_OPENED`, `VOTING_TIE`, `VOTING_CLOSED`. Para criar outro, adicione o tipo em `EmailMessage` e o `case` em `render()`.
+- Templates: `INVITE`, `PASSWORD_RESET`, `VOTING_OPENED`, `VOTING_TIE`, `VOTING_CLOSED`, `REQUEST_PROVISIONED`, `REQUEST_CANCELED`, `PAYMENT_RECORDED`, `COMPLEMENT_REQUESTED`. Valores em reais são formatados a partir do texto decimal (`formatMoney`), sem passar por número. Para criar outro, adicione o tipo em `EmailMessage` e o `case` em `render()`.
 
 ### 6.5 `votings` — votações do conselho
 
@@ -237,28 +238,80 @@ Fluxo e regras:
 - Ano sem orçamento → 404.
 - **Template provisório** até chegar o modelo oficial da UTFPR.
 
-### 6.7 `budget` e `requests` — código da Pessoa 1 e contratos
+### 6.7 `budget` — orçamento, saldo e limite (P1)
 
-Portado do código original da P1 (mesmas regras, nomes em inglês):
+| Rota | Permissão | O que faz |
+| --- | --- | --- |
+| `GET /api/budgets` | `budget:read` | Lista os orçamentos (ano mais recente primeiro), cada um com o saldo |
+| `POST /api/budgets` | `budget:manage` | `{ year, initialAmount }`: cadastra o orçamento do ano. Ano repetido → 409 |
+| `GET /api/budgets/:id` | `budget:read` | Orçamento com `balance` (`total`, `available`, `provisioned`, `spent`) |
+| `POST /api/budgets/:id/adjustments` | `budget:manage` | `{ type: ADJUSTMENT_IN \| ADJUSTMENT_OUT, amount, justification }`. Saída maior que o disponível → 422 |
+| `GET /api/budgets/:id/ledger` | `budget:read` | Histórico de lançamentos, do mais recente ao mais antigo, com `page`/`pageSize` |
+| `GET /api/approval-limits` | `budget:read` | Limites, o de início mais recente primeiro |
+| `POST /api/approval-limits` | `limits:manage` | `{ amount, periodMonths, validFrom? }`: cadastra e encerra o anterior |
 
-- `budget.service.ts`: `createBudget`, `adjustBudget` (exige justificativa; o ajuste negativo não deixa o disponível negativo), `getBalance` (disponível/provisionado/utilizado derivados do ledger), `lockBudget`, `tryProvision` e `getAnnualSummary`.
-- `approval-limit.service.ts`: `createLimit` (encerra o limite vigente) e `checkLimit` (janela móvel de `periodMonths`).
-- `requests.service.ts`: `STATUSES_COUNTED_IN_LIMIT` e os contratos da votação: `getForVoting` (trava a solicitação), `markInVoting` e `applyVotingResult`.
+Regras:
 
-Contratos da P2 que a P1 deve usar:
+- **Dinheiro entra como texto decimal** (`"1500.50"`, até 2 casas) e sai com 2 casas. Número JSON, negativo ou formato inválido → 400. É o `money`/`positiveMoney` de `shared/schemas.ts`; a saída usa `moneyOut`/`balanceOut` de `shared/money.ts`.
+- `getBalance` deriva tudo do ledger: `available = total − Σ PROVISION + Σ RELEASE`, `provisioned = Σ PROVISION − Σ RELEASE − Σ SPEND`, `spent = Σ SPEND`.
+- O ajuste negativo roda sob `lockBudget` e confere o disponível dentro da mesma transação.
+- **Limite:** `createLimit` compara o novo início com o limite de **início mais recente** (`findLatest`), e não com o vigente na data nova; senão uma data dentro do período de um limite antigo reescreveria o passado. Um lock de aconselhamento (`pg_advisory_xact_lock`) serializa cadastros simultâneos, e a constraint `ApprovalLimit_no_overlap` (EXCLUDE) garante no banco que dois períodos nunca se sobrepõem.
+- `checkLimit` usa janela móvel de `periodMonths` e soma os `STATUSES_COUNTED_IN_LIMIT`.
 
-- `audit.record(tx, actor, …)` em toda mudança financeira e de status;
-- `notifications.enqueue(tx, …)` para aprovação automática, pagamento e cancelamento (os templates ainda precisam ser criados);
-- `votings.cancelForRequest(tx, requestId, actor)` ao cancelar uma solicitação, chamado com a solicitação já travada por `getForVoting`;
-- `actorFrom(req)`, `authenticate` e `requirePermission(...)` nas rotas.
+### 6.8 `categories` — finalidades de despesa (P1)
 
-Ainda falta (P1):
-- rotas de orçamento e limite;
-- CRUD de solicitações com avaliação automática (`checkLimit` + `tryProvision` sob `lockBudget`);
-- complementação (`ComplementRequest`);
-- cancelamento com `RELEASE`;
-- pagamentos com diferença justificada;
-- categorias e dashboard.
+| Rota | Permissão | O que faz |
+| --- | --- | --- |
+| `GET /api/categories` | logado | Quem tem `categories:manage` vê todas; os demais veem só as ativas |
+| `POST /api/categories` | `categories:manage` | `{ name }`. Nome repetido → 409 |
+| `PATCH /api/categories/:id` | `categories:manage` | `{ name?, active? }`. Categoria nunca é apagada |
+
+`categories.requireActive(db, id)` é usada ao criar e ao editar uma solicitação: inexistente → "Categoria inválida", inativa → "Esta categoria está inativa" (ambas 422).
+
+### 6.9 `requests` — solicitações (P1)
+
+| Rota | Permissão | O que faz |
+| --- | --- | --- |
+| `POST /api/requests` | `requests:create` | `{ categoryId, description, amount }`. Avalia na hora (abaixo). Usa o orçamento do ano corrente (404 se não houver) |
+| `GET /api/requests` | logado | Filtros `status`, `categoryId`, `requesterId`, `from`, `to`, `page`, `pageSize`. Quem não tem `requests:readAll` vê só as próprias, e o filtro `requesterId` é ignorado |
+| `GET /api/requests/:id` | logado | Detalhe com `amounts` (solicitado, provisionado, pago), pagamento, complementações e `timeline`. Sem acesso → 404 |
+| `PATCH /api/requests/:id` | `requests:create` + ser o dono | `{ description?, categoryId?, amount? }` |
+| `POST /api/requests/:id/cancel` | dono ou `requests:cancelAny` | `{ justification? }` |
+| `POST /api/requests/:id/provision` | `budget:manage` | Provisiona uma solicitação que aguarda saldo |
+| `POST /api/requests/:id/complement-requests` | `requests:requestComplement` | `{ message }` |
+
+**Avaliação** (`evaluateRequest`, sempre sob `lockBudget`):
+
+```text
+dentro do limite, com saldo ──► PROVISIONED (lança PROVISION)
+dentro do limite, sem saldo ──► AWAITING_BALANCE
+acima do limite ────────────► AWAITING_VOTING
+```
+
+- **Editar:** só o dono. O texto e a categoria mudam até `PAID`; o valor só em `AWAITING_VOTING`/`AWAITING_COMPLEMENT` (422 nos outros status). Mudar o valor, ou editar uma solicitação em `AWAITING_COMPLEMENT`, **reavalia** com `excludeRequestId`, para a própria solicitação não entrar duas vezes no acumulado. Paga, rejeitada ou cancelada → 409.
+- **Cancelar:** o dono cancela a própria; o chefe cancela a de outra pessoa **com justificativa**. Cancela a votação aberta (`votings.cancelForRequest`) e, se estava provisionada, lança `RELEASE`. Paga, rejeitada ou cancelada → 409. O solicitante só é avisado por e-mail quando outra pessoa cancela.
+- **Complementar:** em `AWAITING_VOTING` a solicitação passa a `AWAITING_COMPLEMENT`; em `IN_VOTING` o status e o valor não mudam. Em outros status → 409.
+- **Idempotência:** toda operação começa com `requests.getLocked` (lock da solicitação) e confere o status sob o lock, então repetir provisionar, cancelar ou pagar devolve 409 sem lançar nada de novo.
+- Arquivos: `request-creation.service.ts`, `request-edit.service.ts`, `request-cancellation.service.ts`, `request-complement.service.ts`, `request-evaluation.ts`, `request-queries.service.ts` e `request-notifications.ts`. Estão separados de `requests.service.ts` para não formar ciclo de importação com `approval-limit.service.ts`.
+- E-mails ao solicitante: aprovada/provisionada (`REQUEST_PROVISIONED`), cancelada por outra pessoa (`REQUEST_CANCELED`), pedido de complementação (`COMPLEMENT_REQUESTED`) e pagamento (`PAYMENT_RECORDED`).
+
+### 6.10 `payments` — pagamento (P1)
+
+`POST /api/requests/:id/payment` (`payments:record`): `{ paidAmount, justification? }`. Resposta `201` com `payment` e `balance`.
+
+| Valor pago | Lançamentos |
+| --- | --- |
+| Igual ao provisionado | `SPEND(pago)` |
+| Menor | `SPEND(pago)` + `RELEASE(diferença)`, com justificativa |
+| Maior | `PROVISION(diferença)` + `SPEND(pago)`, com justificativa e exigindo saldo (senão 422) |
+
+A solicitação precisa estar `PROVISIONED` (senão 409) e passa a `PAID`. `Payment.requestId` é único, então não existe pagamento duplicado em retry.
+
+### 6.11 `dashboard` — indicadores (P1)
+
+`GET /api/dashboard?year=` (`dashboard:read`; sem `year`, o ano corrente; ano sem orçamento → 404). Devolve `balance`, `requests.byStatus`, `byMonth` (solicitado e pago por mês, no fuso de Brasília), `topRequesters` e `topCategories` (5 maiores por valor). Canceladas ficam fora dos valores por mês e dos rankings, mas aparecem na contagem por situação. **[VALIDAR]** quais indicadores o cliente quer.
+
+Contratos da P2 usados pela P1: `audit.record(tx, actor, …)`, `notifications.enqueue(tx, …)`, `votings.cancelForRequest(tx, requestId, actor)` (chamado com a solicitação já travada) e `actorFrom(req)`, `authenticate` e `requirePermission(...)` nas rotas.
 
 ## 7. Banco de dados
 
@@ -303,6 +356,8 @@ Para alterar o schema:
 
 - `pnpm test` recria o banco de `TEST_DATABASE_URL`, aplica as migrations e roda os arquivos em sequência. Cada teste começa com `resetDatabase()` (TRUNCATE de todas as tabelas).
 - São testes de integração de verdade: Supertest contra o app Express e PostgreSQL real, sem mock do banco.
+- Apoio financeiro em `src/test/finance.ts`: `setupFinance()` (orçamento do ano corrente, limite, categoria, professor e chefe), `insertRequest(...)`, `ledgerOf(...)` e `emailsOf(...)`.
+- **Testes de lock:** `holdBudgetWithPendingOutflow` e `holdRequestWithStatus` seguram uma transação aberta com uma mudança ainda não confirmada; a operação testada precisa esperar (`stillPending`) e decidir com o dado já atualizado. Um teste de concorrência com `Promise.all` passa por sorte de tempo, então não prova o lock.
 - Factories em `src/test/factories.ts`: `createUser({ roles })`, `loginAs(app, user)` (agente com cookie) e `createRequest({ requesterId, status })`.
 - Regras de risco da P2 cobertas:
   - votação: voto duplo (409), voto após o prazo (422), não convocado e solicitante (403), rotina de encerramento 2× → uma provisão, empate → desempate, só abstenções, comentários invisíveis ao solicitante;

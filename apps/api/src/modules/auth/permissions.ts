@@ -11,6 +11,7 @@ export const PERMISSIONS = [
     "votings:tieBreak",
     "votings:comment",
     "budget:manage",
+    "budget:read",
     "limits:manage",
     "categories:manage",
     "payments:record",
@@ -35,6 +36,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
         "votings:tieBreak",
         "votings:comment",
         "budget:manage",
+        "budget:read",
         "limits:manage",
         "categories:manage",
         "payments:record",
@@ -43,7 +45,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
         "reports:read",
         "audit:read",
     ],
-    FINANCIAL_ADMIN: ["requests:readAll", "dashboard:read", "reports:read", "audit:read"],
+    FINANCIAL_ADMIN: ["requests:readAll", "budget:read", "dashboard:read", "reports:read", "audit:read"],
 };
 
 export function permissionsFor(roles: Role[]): Set<Permission> {
