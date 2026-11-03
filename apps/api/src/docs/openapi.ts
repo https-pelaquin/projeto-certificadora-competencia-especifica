@@ -3,6 +3,8 @@ import * as auditSchemas from "../modules/audit/audit.schemas";
 import * as authSchemas from "../modules/auth/auth.schemas";
 import * as budgetSchemas from "../modules/budget/budget.schemas";
 import * as categoriesSchemas from "../modules/categories/categories.schemas";
+import * as paymentsSchemas from "../modules/payments/payments.schemas";
+import * as requestsSchemas from "../modules/requests/requests.schemas";
 import * as usersSchemas from "../modules/users/users.schemas";
 import * as votingsSchemas from "../modules/votings/votings.schemas";
 
@@ -58,6 +60,14 @@ const operations: Operation[] = [
     { method: "post", path: "/api/categories", tag: "Categorias", summary: "Criar categoria", permission: "categories:manage", body: categoriesSchemas.createBody, responses: { 201: "Categoria criada", 409: "Nome já existe" } },
     { method: "patch", path: "/api/categories/:id", tag: "Categorias", summary: "Renomear ou ativar/desativar categoria", permission: "categories:manage", body: categoriesSchemas.updateBody, responses: { 200: "Categoria", 404: "Não encontrada", 409: "Nome já existe" } },
 
+    { method: "get", path: "/api/requests", tag: "Solicitações", summary: "Listar solicitações (as próprias, ou todas para quem lê tudo)", query: requestsSchemas.listQuery, responses: { 200: "Página de solicitações" } },
+    { method: "post", path: "/api/requests", tag: "Solicitações", summary: "Criar solicitação; a avaliação é automática (provisionada, aguardando saldo ou aguardando votação)", permission: "requests:create", body: requestsSchemas.createBody, responses: { 201: "Solicitação criada e avaliada", 404: "Sem orçamento no ano", 422: "Categoria inválida ou sem limite vigente" } },
+    { method: "get", path: "/api/requests/:id", tag: "Solicitações", summary: "Detalhar solicitação, valores e linha do tempo", responses: { 200: "Solicitação", 404: "Não encontrada ou sem acesso" } },
+    { method: "patch", path: "/api/requests/:id", tag: "Solicitações", summary: "Editar (só o solicitante). O valor só antes da votação; mudá-lo reavalia", permission: "requests:create", body: requestsSchemas.editBody, responses: { 200: "Solicitação", 403: "Não é o solicitante", 409: "Não pode mais ser editada", 422: "Valor travado" } },
+    { method: "post", path: "/api/requests/:id/cancel", tag: "Solicitações", summary: "Cancelar (o solicitante, ou o chefe com justificativa); devolve o provisionado", body: requestsSchemas.cancelBody, responses: { 200: "Solicitação cancelada", 403: "Sem permissão", 409: "Já paga, rejeitada ou cancelada", 422: "Falta a justificativa" } },
+    { method: "post", path: "/api/requests/:id/provision", tag: "Solicitações", summary: "Provisionar uma solicitação que aguarda saldo", permission: "budget:manage", responses: { 200: "Solicitação provisionada", 409: "Não aguarda saldo", 422: "Saldo insuficiente" } },
+    { method: "post", path: "/api/requests/:id/complement-requests", tag: "Solicitações", summary: "Pedir complementação ao solicitante", permission: "requests:requestComplement", body: requestsSchemas.complementBody, responses: { 201: "Pedido registrado", 409: "Fora do período de votação" } },
+    { method: "post", path: "/api/requests/:id/payment", tag: "Pagamentos", summary: "Registrar o pagamento; diferença do provisionado exige justificativa", permission: "payments:record", body: paymentsSchemas.recordBody, responses: { 201: "Pagamento registrado e saldo", 409: "Não está provisionada ou já paga", 422: "Falta justificativa ou saldo para a diferença" } },
 
 
     { method: "get", path: "/api/audit-logs", tag: "Auditoria", summary: "Consultar auditoria", permission: "audit:read", query: auditSchemas.listQuery, responses: { 200: "Página de registros" } },
