@@ -2,6 +2,7 @@ import { z } from "zod";
 import * as auditSchemas from "../modules/audit/audit.schemas";
 import * as authSchemas from "../modules/auth/auth.schemas";
 import * as budgetSchemas from "../modules/budget/budget.schemas";
+import * as categoriesSchemas from "../modules/categories/categories.schemas";
 import * as usersSchemas from "../modules/users/users.schemas";
 import * as votingsSchemas from "../modules/votings/votings.schemas";
 
@@ -53,6 +54,9 @@ const operations: Operation[] = [
     { method: "get", path: "/api/approval-limits", tag: "Orçamento", summary: "Listar limites de aprovação (o mais recente primeiro)", permission: "budget:read", responses: { 200: "Lista" } },
     { method: "post", path: "/api/approval-limits", tag: "Orçamento", summary: "Cadastrar limite de aprovação; encerra o anterior", permission: "limits:manage", body: budgetSchemas.createLimitBody, responses: { 201: "Limite criado", 422: "Início anterior ao último limite" } },
 
+    { method: "get", path: "/api/categories", tag: "Categorias", summary: "Listar categorias (quem não administra vê só as ativas)", responses: { 200: "Lista" } },
+    { method: "post", path: "/api/categories", tag: "Categorias", summary: "Criar categoria", permission: "categories:manage", body: categoriesSchemas.createBody, responses: { 201: "Categoria criada", 409: "Nome já existe" } },
+    { method: "patch", path: "/api/categories/:id", tag: "Categorias", summary: "Renomear ou ativar/desativar categoria", permission: "categories:manage", body: categoriesSchemas.updateBody, responses: { 200: "Categoria", 404: "Não encontrada", 409: "Nome já existe" } },
 
 
 

@@ -10,6 +10,7 @@ import { requireJson } from "./middlewares/requireJson";
 import { createAuditRouter } from "./modules/audit/audit.routes";
 import { createAuthRouter } from "./modules/auth/auth.routes";
 import { createBudgetRouter } from "./modules/budget/budget.routes";
+import { createCategoriesRouter } from "./modules/categories/categories.routes";
 import { createReportsRouter } from "./modules/reports/reports.routes";
 import { createUsersRouter } from "./modules/users/users.routes";
 import { createVotingsRouter } from "./modules/votings/votings.routes";
@@ -44,6 +45,7 @@ export function createApp() {
     app.use("/api", createVotingsRouter());
     app.use("/api", createReportsRouter());
     app.use("/api", createBudgetRouter());
+    app.use("/api", createCategoriesRouter());
 
     app.use(notFound);
     app.use(errorHandler);
