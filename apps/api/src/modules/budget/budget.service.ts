@@ -78,7 +78,12 @@ export async function getBalance(db: Db, budgetId: number) {
 }
 
 // Provisiona se houver saldo. Exige o lock do orçamento (lockBudget) na mesma transação.
-export async function tryProvision(db: Db, actor: Actor, data: { budgetId: number; requestId: number; amount: Prisma.Decimal }) {
+export async function tryProvision(db: Db, actor: Actor, data: {
+    budgetId: number;
+    requestId: number;
+    amount: Prisma.Decimal;
+    justification?: string;
+}) {
     const balance = await getBalance(db, data.budgetId);
     if (balance.available.lessThan(data.amount)) {
         return false;
@@ -88,8 +93,57 @@ export async function tryProvision(db: Db, actor: Actor, data: { budgetId: numbe
     return true;
 }
 
+type RequestEntry = { budgetId: number; requestId: number; amount: Prisma.Decimal; justification?: string };
+
+// Devolve ao disponível o que estava provisionado. Exige o lock do orçamento na mesma transação.
+export function release(db: Db, actor: Actor, data: RequestEntry) {
+    return budgetRepository.createLedgerEntry(db, { ...data, type: "RELEASE", createdById: actorUserId(actor) });
+}
+
+// Registra o gasto (provisionado vira utilizado). Exige o lock do orçamento na mesma transação.
+export function spend(db: Db, actor: Actor, data: RequestEntry) {
+    return budgetRepository.createLedgerEntry(db, { ...data, type: "SPEND", createdById: actorUserId(actor) });
+}
+
+// Quanto ainda está provisionado para a solicitação: PROVISION − RELEASE − SPEND dos lançamentos dela.
+export async function getRequestProvisioned(db: Db, requestId: number) {
+    const sums = await budgetRepository.sumLedgerByTypeForRequest(db, requestId);
+    const sumOf = (type: LedgerEntryType) => sums.find((s) => s.type === type)?._sum.amount ?? ZERO;
+
+    return sumOf("PROVISION").minus(sumOf("RELEASE")).minus(sumOf("SPEND"));
+}
+
 export function findBudgetById(id: number) {
     return budgetRepository.findById(prisma, id);
+}
+
+export function findBudgetByYear(db: Db, year: number) {
+    return budgetRepository.findByYear(db, year);
+}
+
+export async function listBudgets() {
+    const budgets = await budgetRepository.list(prisma);
+    return Promise.all(budgets.map(async (budget) => ({ budget, balance: await getBalance(prisma, budget.id) })));
+}
+
+export async function getBudgetDetail(id: number) {
+    const budget = await budgetRepository.findById(prisma, id);
+    if (!budget) {
+        throw new NotFoundError("Orçamento não encontrado");
+    }
+    return { budget, balance: await getBalance(prisma, id) };
+}
+
+// Histórico do ledger, do mais recente ao mais antigo.
+export async function listLedger(budgetId: number, page: number, pageSize: number) {
+    if (!(await budgetRepository.findById(prisma, budgetId))) {
+        throw new NotFoundError("Orçamento não encontrado");
+    }
+    const [items, total] = await Promise.all([
+        budgetRepository.listLedger(prisma, budgetId, { skip: (page - 1) * pageSize, take: pageSize }),
+        budgetRepository.countLedger(prisma, budgetId),
+    ]);
+    return { items, page, pageSize, total };
 }
 
 export async function getAnnualSummary(year: number) {

@@ -3,6 +3,7 @@ import { Prisma } from "../../../../generated/prisma/client";
 import { BusinessRuleError, ConflictError } from "../../../shared/errors";
 import { prisma } from "../../../shared/prisma";
 import { resetDatabase } from "../../../test/db";
+import { holdBudgetWithPendingOutflow, ledgerOf, stillPending } from "../../../test/finance";
 import { adjustBudget, createBudget } from "../budget.service";
 
 const D = (v: string) => new Prisma.Decimal(v);
@@ -38,4 +39,21 @@ it("o banco recusa UPDATE no ledger", async () => {
     const budget = await createBudget(system, { year: 2026, initialAmount: D("1000.00") });
     await adjustBudget(system, budget.id, { amount: D("10.00"), type: "ADJUSTMENT_IN", justification });
     await expect(prisma.ledgerEntry.updateMany({ data: { amount: D("99.00") } })).rejects.toThrow(/só de inclusão/);
+});
+
+it("confere o saldo só depois de outra operação em andamento no orçamento terminar", async () => {
+    const budget = await createBudget(system, { year: 2026, initialAmount: D("1000.00") });
+    // Outra operação já travou o orçamento e vai tirar 600 dele; o valor só aparece depois do commit.
+    const other = await holdBudgetWithPendingOutflow(budget.id, "600.00");
+
+    const adjusting = adjustBudget(system, budget.id, { amount: D("500.00"), type: "ADJUSTMENT_OUT", justification });
+    const outcome = expect(adjusting).rejects.toThrow(BusinessRuleError);
+    expect(await stillPending(adjusting)).toBe(true);
+
+    other.release();
+    await other.done;
+    await outcome;
+
+    // Com 400 disponíveis, 500 não cabem: o ajuste não passou por cima de um saldo velho.
+    expect(await ledgerOf(budget.id)).toEqual(["ADJUSTMENT_OUT 600.00"]);
 });
