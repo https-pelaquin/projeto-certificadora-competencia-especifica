@@ -3,6 +3,7 @@ import * as auditSchemas from "../modules/audit/audit.schemas";
 import * as authSchemas from "../modules/auth/auth.schemas";
 import * as budgetSchemas from "../modules/budget/budget.schemas";
 import * as categoriesSchemas from "../modules/categories/categories.schemas";
+import * as dashboardSchemas from "../modules/dashboard/dashboard.schemas";
 import * as paymentsSchemas from "../modules/payments/payments.schemas";
 import * as requestsSchemas from "../modules/requests/requests.schemas";
 import * as usersSchemas from "../modules/users/users.schemas";
@@ -69,6 +70,7 @@ const operations: Operation[] = [
     { method: "post", path: "/api/requests/:id/complement-requests", tag: "Solicitações", summary: "Pedir complementação ao solicitante", permission: "requests:requestComplement", body: requestsSchemas.complementBody, responses: { 201: "Pedido registrado", 409: "Fora do período de votação" } },
     { method: "post", path: "/api/requests/:id/payment", tag: "Pagamentos", summary: "Registrar o pagamento; diferença do provisionado exige justificativa", permission: "payments:record", body: paymentsSchemas.recordBody, responses: { 201: "Pagamento registrado e saldo", 409: "Não está provisionada ou já paga", 422: "Falta justificativa ou saldo para a diferença" } },
 
+    { method: "get", path: "/api/dashboard", tag: "Dashboard", summary: "Indicadores do ano: saldo, solicitações, valores por mês e rankings", permission: "dashboard:read", query: dashboardSchemas.query, responses: { 200: "Indicadores", 404: "Ano sem orçamento" } },
 
     { method: "get", path: "/api/audit-logs", tag: "Auditoria", summary: "Consultar auditoria", permission: "audit:read", query: auditSchemas.listQuery, responses: { 200: "Página de registros" } },
 

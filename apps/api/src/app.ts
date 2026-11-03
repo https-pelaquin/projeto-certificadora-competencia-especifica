@@ -11,6 +11,7 @@ import { createAuditRouter } from "./modules/audit/audit.routes";
 import { createAuthRouter } from "./modules/auth/auth.routes";
 import { createBudgetRouter } from "./modules/budget/budget.routes";
 import { createCategoriesRouter } from "./modules/categories/categories.routes";
+import { createDashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { createPaymentsRouter } from "./modules/payments/payments.routes";
 import { createReportsRouter } from "./modules/reports/reports.routes";
 import { createRequestsRouter } from "./modules/requests/requests.routes";
@@ -50,6 +51,7 @@ export function createApp() {
     app.use("/api", createCategoriesRouter());
     app.use("/api", createRequestsRouter());
     app.use("/api", createPaymentsRouter());
+    app.use("/api", createDashboardRouter());
 
     app.use(notFound);
     app.use(errorHandler);
