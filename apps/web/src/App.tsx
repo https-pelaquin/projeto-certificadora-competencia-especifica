@@ -6,7 +6,14 @@ import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/hooks/use-auth';
 import { ShellLayout } from '@/components/layout/shell-layout';
 import { ProtectedRoute } from '@/components/layout/protected-route';
-import { LoginPage, OverviewPage, RequestsPage, UsersPage } from '@/pages';
+import {
+  LoginPage,
+  OverviewPage,
+  RequestsPage,
+  UsersPage,
+  AnalyticsPage,
+  ReportsPage,
+} from '@/pages';
 import { AccessDenied } from '@/components/shared';
 import { registerAuthRedirectHandler } from '@/lib/api-client';
 import { queryClient } from '@/lib/query-client';
@@ -67,6 +74,24 @@ export default function App() {
                     element={
                       <ProtectedRoute allowedRoles={['HEAD']}>
                         <UsersPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/analise-financeira"
+                    element={
+                      <ProtectedRoute allowedRoles={['HEAD', 'FINANCIAL_ADMIN']}>
+                        <AnalyticsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/relatorios"
+                    element={
+                      <ProtectedRoute allowedRoles={['HEAD', 'FINANCIAL_ADMIN']}>
+                        <ReportsPage />
                       </ProtectedRoute>
                     }
                   />
