@@ -38,7 +38,7 @@ type AuthRedirectHandler = () => void;
 let authRedirectHandler: AuthRedirectHandler | null = null;
 
 /**
- * Registra o callback do Router para redirecionamento SPA imediato em 401/403.
+ * Registra o callback do Router para redirecionamento SPA imediato em 401.
  */
 export function registerAuthRedirectHandler(
   handler: AuthRedirectHandler | null,
@@ -163,7 +163,7 @@ export async function apiRequest<T>(
       toast.error(apiError.message, title);
     }
 
-    if ((response.status === 401 || response.status === 403) && !skipAuthRedirect) {
+    if (response.status === 401 && !skipAuthRedirect) {
       handleSessionFailure();
     }
 

@@ -11,6 +11,10 @@ import {
   Building2,
   Shield,
   Camera,
+  Vote,
+  WalletCards,
+  ListChecks,
+  Tags,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -18,7 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { UserAvatar } from '@/components/shared';
 import { ProfileAvatarModal } from '@/features/auth/components/profile-avatar-modal';
 import { useAuth } from '@/hooks/use-auth';
-import { ROLE_LABELS, type Role } from '@/types';
+import { ROLE_LABELS, type Permission, type Role } from '@/types';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -26,6 +30,7 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   path: string;
   roles: Role[];
+  permissions?: Permission[];
 }
 
 const ALL_NAV_ITEMS: NavItem[] = [
@@ -42,6 +47,33 @@ const ALL_NAV_ITEMS: NavItem[] = [
     roles: ['PROFESSOR'],
   },
   {
+    label: 'Deliberações',
+    icon: Vote,
+    path: '/deliberacoes',
+    roles: ['PROFESSOR', 'COUNCIL_MEMBER', 'HEAD', 'FINANCIAL_ADMIN'],
+  },
+  {
+    label: 'Operações',
+    icon: ListChecks,
+    path: '/operacional',
+    roles: ['HEAD', 'FINANCIAL_ADMIN'],
+    permissions: ['requests:readAll'],
+  },
+  {
+    label: 'Gestão Financeira',
+    icon: WalletCards,
+    path: '/financeiro',
+    roles: ['HEAD', 'FINANCIAL_ADMIN'],
+    permissions: ['budget:read'],
+  },
+  {
+    label: 'Categorias',
+    icon: Tags,
+    path: '/financeiro/categorias',
+    roles: ['HEAD'],
+    permissions: ['categories:manage'],
+  },
+  {
     label: 'Gestão de Usuários',
     icon: Users,
     path: '/usuarios',
@@ -53,12 +85,14 @@ export function ShellLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [avatarModalOpen, setAvatarModalOpen] = useState(false);
-  const { user, activeRole, hasAnyActiveRole, logout } = useAuth();
+  const { user, activeRole, hasAnyActiveRole, hasAnyPermission, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   // Exibe apenas as rotas cujos perfis exigidos estejam vigentes na sessão atual
-  const navItems = ALL_NAV_ITEMS.filter((item) => hasAnyActiveRole(item.roles));
+  const navItems = ALL_NAV_ITEMS.filter(
+    (item) => hasAnyActiveRole(item.roles) && (!item.permissions || hasAnyPermission(item.permissions)),
+  );
 
   const handleLogout = async () => {
     await logout();
@@ -104,7 +138,9 @@ export function ShellLayout() {
         <TooltipProvider delay={100}>
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
+            const isActive =
+              location.pathname === item.path ||
+              (item.path !== '/financeiro' && location.pathname.startsWith(item.path + '/'));
             const navLinkElement = (
               <NavLink
                 to={item.path}

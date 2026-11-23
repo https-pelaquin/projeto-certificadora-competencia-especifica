@@ -24,7 +24,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
-import { hasActiveRole } from '@/lib/auth-rules';
+import { getHomePath } from '@/lib/auth-rules';
 import { forgotPassword, resetPassword } from '@/services/api';
 
 const loginSchema = z.object({
@@ -106,13 +106,7 @@ export function LoginPage() {
     try {
       setAuthError(null);
       const authenticatedUser = await login(data.email, data.password);
-      if (hasActiveRole(authenticatedUser, 'PROFESSOR')) {
-        navigate('/docente');
-      } else if (hasActiveRole(authenticatedUser, 'HEAD')) {
-        navigate('/usuarios');
-      } else {
-        navigate('/acesso-negado');
-      }
+       navigate(getHomePath(authenticatedUser.activeRoles));
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : 'Falha na autenticação');
     }
