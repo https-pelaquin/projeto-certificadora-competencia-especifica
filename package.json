@@ -7,6 +7,8 @@
   },
   "scripts": {
     "dev": "pnpm --filter api dev",
+    "dev:web": "pnpm --filter utfpr-dacom-frontend dev",
+    "lint": "pnpm --filter utfpr-dacom-frontend lint",
     "test": "pnpm --filter api test",
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build"
@@ -16,6 +18,9 @@
       "@prisma/engines",
       "esbuild",
       "prisma"
-    ]
+    ],
+    "overrides": {
+      "effect@<3.22.1": "^3.22.1"
+    }
   }
 }

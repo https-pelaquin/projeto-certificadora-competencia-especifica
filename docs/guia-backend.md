@@ -225,7 +225,7 @@ Fluxo e regras:
 1. **Abrir:** grava os convocados (conselheiros ativos, exceto o chefe vigente e o solicitante). Sem convocados, responde 422. A solicitação vai para `IN_VOTING` e os convocados recebem e-mail.
 2. **Votar:** só convocados, com a votação `OPEN` e antes do prazo. Um voto por pessoa (PK no banco; segundo voto → 409). Não há alteração de voto nem encerramento antecipado.
 3. **Encerrar:** a rotina `closeExpiredVotings` (a cada 60 s) apura as votações vencidas. A abstenção não conta e a maioria simples decide. **Qualquer empate, inclusive 0×0, vai para `AWAITING_TIE_BREAK`** e o chefe recebe e-mail. A rotina é idempotente: rodar duas vezes não provisiona duas vezes.
-4. **Desempatar:** o chefe registra uma única decisão (`TieBreak`), que encerra a votação.
+4. **Desempatar:** o chefe registra uma única decisão (`TieBreak`), que encerra a votação. O chefe não desempata a própria solicitação (403); quem decide nesse caso é `[VALIDAR]`.
 5. **Resultado:** `requests.applyVotingResult`. Aprovada provisiona no ledger se houver saldo, senão vai para `AWAITING_BALANCE`; rejeitada vai para `REJECTED`. Solicitante e convocados recebem e-mail.
 6. **Comentários:** só convocados e chefe, nunca o solicitante, e só enquanto a votação está ativa. Comentários nunca são editados ou apagados.
 
@@ -349,7 +349,7 @@ Para alterar o schema:
   - `UNSUPPORTED_MEDIA_TYPE` (415), `TOO_MANY_REQUESTS` (429);
   - `INTERNAL_ERROR` (500, com o código da requisição).
 - `GET /api/auth/me` devolve `permissions`: use para mostrar ou esconder ações. O backend continua validando.
-- Os e-mails já enviam links para três rotas que o frontend precisa implementar: `/definir-senha?token=…` (chama `POST /api/auth/password/reset`), `/votacoes/:id` e `/solicitacoes/:id`.
+- Os e-mails já enviam links para três rotas que o frontend precisa implementar: `/definir-senha?token=…` (chama `POST /api/auth/password/reset`), `/deliberacoes/:id` e `/solicitacoes/:id`.
 - Datas chegam em ISO 8601 UTC; valores monetários chegam como string decimal (`"1500.00"`).
 
 ## 9. Testes

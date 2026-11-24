@@ -167,6 +167,23 @@ describe("desempate", () => {
         expect((await s.headAgent.post(`/api/votings/${votingId}/tie-break`).send({ choice: "REJECT" })).status).toBe(409);
         expect(await prisma.tieBreak.count()).toBe(1);
     });
+
+    it("chefe não desempata a própria solicitação", async () => {
+        const head = await createUser({ roles: ["HEAD", "PROFESSOR"] });
+        await createUser({ roles: ["COUNCIL_MEMBER"] });
+        const req = await createRequest({ requesterId: head.id });
+        const headAgent = await loginAs(app, head);
+        const opened = await headAgent.post(`/api/requests/${req.id}/votings`).send({ deadline: inOneHour() });
+        expect(opened.status).toBe(201);
+        expect(await closeExpiredVotings(afterDeadline())).toEqual([{ id: opened.body.id, outcome: "TIE" }]);
+
+        const res = await headAgent.post(`/api/votings/${opened.body.id}/tie-break`).send({ choice: "APPROVE" });
+        expect(res.status).toBe(403);
+        expect(await prisma.tieBreak.count()).toBe(0);
+
+        // Dinheiro sai com duas casas, como no restante da API.
+        expect((await headAgent.get(`/api/votings/${opened.body.id}`)).body.request.amount).toMatch(/^\d+\.\d{2}$/);
+    });
 });
 
 describe("visibilidade", () => {
