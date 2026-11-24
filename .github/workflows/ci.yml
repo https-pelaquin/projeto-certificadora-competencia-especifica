@@ -41,6 +41,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter api db:generate
       - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
       - run: pnpm --filter api db:migrate
       - run: pnpm --filter api exec playwright install --with-deps chromium-headless-shell
       - run: pnpm test

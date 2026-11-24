@@ -297,8 +297,18 @@ pnpm --filter api db:migrate
 pnpm --filter api db:seed
 pnpm dev                                 # API em http://localhost:3000/api
 pnpm test                                # testes contra PostgreSQL real
+
+# Frontend (em outro terminal, com a API rodando)
+cp apps/web/.env.example apps/web/.env   # VITE_ENABLE_MSW=false usa a API real
+pnpm dev:web                             # http://localhost:5173 (proxy /api -> :3000)
+
+# Checks que o CI também roda
+pnpm typecheck && pnpm lint && pnpm build
 ```
 
+- Login inicial: o chefe criado pelo seed (`SEED_HEAD_EMAIL` / `SEED_HEAD_PASSWORD`). Os demais usuários entram por convite.
+- Com `VITE_ENABLE_MSW=true` o frontend usa mocks em memória, que podem divergir da API; use só para QA isolado.
+- Se o `prisma generate` reclamar que `apps/api/generated/prisma` "não parece um Prisma Client", apague essa pasta (é gerada) e rode de novo.
 - Documentação da API (Swagger UI): `http://localhost:3000/api/docs`.
 - E-mails de desenvolvimento (Mailpit): `http://localhost:8025`.
 - Guia do backend, com o papel de cada arquivo, as regras implementadas e os contratos entre módulos: [`docs/guia-backend.md`](docs/guia-backend.md).
