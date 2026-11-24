@@ -1,18 +1,20 @@
 import { Loader2 } from 'lucide-react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/use-auth';
-import type { Role } from '@/types';
+import type { Permission, Role } from '@/types';
 
 interface ProtectedRouteProps {
   allowedRoles?: Role[];
+  allowedPermissions?: Permission[];
   children?: React.ReactNode;
 }
 
 export function ProtectedRoute({
   allowedRoles,
+  allowedPermissions,
   children,
 }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, hasAnyActiveRole } = useAuth();
+  const { isAuthenticated, isLoading, hasAnyActiveRole, hasAnyPermission } = useAuth();
 
   if (isLoading) {
     return (
@@ -30,6 +32,11 @@ export function ProtectedRoute({
   }
 
   if (allowedRoles && !hasAnyActiveRole(allowedRoles)) {
+    return <Navigate to="/acesso-negado" replace />;
+  }
+
+
+  if (allowedPermissions && !hasAnyPermission(allowedPermissions)) {
     return <Navigate to="/acesso-negado" replace />;
   }
 

@@ -5,6 +5,25 @@
 /** Perfis de acesso do sistema */
 export type Role = 'PROFESSOR' | 'COUNCIL_MEMBER' | 'HEAD' | 'FINANCIAL_ADMIN';
 
+export type Permission =
+  | 'requests:create'
+  | 'requests:readAll'
+  | 'requests:requestComplement'
+  | 'requests:cancelAny'
+  | 'votings:open'
+  | 'votings:vote'
+  | 'votings:tieBreak'
+  | 'votings:comment'
+  | 'budget:manage'
+  | 'budget:read'
+  | 'limits:manage'
+  | 'categories:manage'
+  | 'payments:record'
+  | 'users:manage'
+  | 'dashboard:read'
+  | 'reports:read'
+  | 'audit:read';
+
 /** Labels legíveis para cada perfil */
 export const ROLE_LABELS: Record<Role, string> = {
   PROFESSOR: 'Docente',
@@ -44,6 +63,16 @@ export interface AuthUser {
   activeRoles: Role[];
   activeRole: Role | null;
   availableRoles: Role[];
+  permissions: Permission[];
+}
+
+/** Resposta efetiva de GET /api/auth/me. */
+export interface AuthMeResponse {
+  id: number | string;
+  name: string;
+  email: string;
+  roles: Role[];
+  permissions: Permission[];
 }
 
 /** Resposta da API de sessão atual */
