@@ -4,6 +4,7 @@ import type { Actor } from "../../shared/actor";
 import { BusinessRuleError, ConflictError, ForbiddenError, NotFoundError } from "../../shared/errors";
 import { log } from "../../shared/logger";
 import { prisma, type Db } from "../../shared/prisma";
+import { moneyOut } from "../../shared/money";
 import type { AuthUser } from "../../types/express";
 import * as audit from "../audit/audit.service";
 import * as notifications from "../notifications/notifications.service";
@@ -15,7 +16,8 @@ type UserActor = Actor & { type: "USER" };
 
 const CLOSE_JOB: Actor = { type: "SYSTEM", job: "closeExpiredVotings" };
 
-const votingLink = (id: number) => `${env.APP_URL}/votacoes/${id}`;
+// Mesma rota do frontend (apps/web/src/App.tsx).
+const votingLink = (id: number) => `${env.APP_URL}/deliberacoes/${id}`;
 const requestLink = (id: number) => `${env.APP_URL}/solicitacoes/${id}`;
 
 // Abstenção não conta. Qualquer empate, inclusive 0×0, vai ao desempate do chefe. [VALIDAR]
@@ -193,7 +195,12 @@ export async function castTieBreak(actor: UserActor, votingId: number, choice: T
         if (!voting) {
             throw new NotFoundError("Votação não encontrada");
         }
-        await requestsService.getForVoting(tx, voting.requestId);
+        const request = await requestsService.getForVoting(tx, voting.requestId);
+        // Conflito de interesse: a abertura já exclui o solicitante dos convocados. Se o chefe é o
+        // solicitante, o empate fica sem desempate até o cliente definir quem decide. [VALIDAR]
+        if (request.requesterId === actor.userId) {
+            throw new ForbiddenError("O chefe não desempata a própria solicitação");
+        }
         await votingsRepository.lock(tx, votingId, "UPDATE");
 
         const current = (await votingsRepository.findById(tx, votingId))!;
@@ -236,7 +243,7 @@ export async function getVoting(user: AuthUser, votingId: number) {
     const isMember = voting.eligibleMembers.some((m) => m.userId === user.id);
     const summary = {
         id: voting.id,
-        request: voting.request,
+        request: { ...voting.request, amount: moneyOut(voting.request.amount) },
         status: voting.status,
         result: voting.result,
         openedAt: voting.openedAt,
@@ -278,7 +285,7 @@ export async function listVotings(user: AuthUser, status?: VotingStatus) {
     const votings = await votingsRepository.list(prisma, where, user.id);
     return votings.map((v) => ({
         id: v.id,
-        request: v.request,
+        request: { ...v.request, amount: moneyOut(v.request.amount) },
         status: v.status,
         result: v.result,
         openedAt: v.openedAt,
