@@ -1,9 +1,12 @@
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/use-auth';
+import { getHomePath } from '@/lib/auth-rules';
 
 export function AccessDenied() {
   const navigate = useNavigate();
+  const { activeRoles } = useAuth();
 
   return (
     <div data-testid="access-denied-page" className="flex flex-col items-center justify-center min-h-[60vh] px-4 text-center">
@@ -16,7 +19,7 @@ export function AccessDenied() {
         Caso acredite tratar-se de uma divergência de vigência, contate a chefia do DACOM ou entre com outra conta institucional.
       </p>
       <div className="flex items-center gap-3">
-        <Button data-testid="btn-back-dashboard" onClick={() => navigate('/docente')} variant="outline" className="gap-2 cursor-pointer">
+        <Button data-testid="btn-back-dashboard" onClick={() => navigate(getHomePath(activeRoles))} variant="outline" className="gap-2 cursor-pointer">
           <ArrowLeft className="h-4 w-4" />
           Voltar ao Painel
         </Button>

@@ -13,9 +13,11 @@ import {
 import {
   hasActiveRole as checkActiveRole,
   hasAnyActiveRole as checkAnyActiveRole,
+  hasPermission as checkPermission,
+  hasAnyPermission as checkAnyPermission,
 } from '@/lib/auth-rules';
 import { requestsQueryKeys } from '@/features/requests/api';
-import type { AuthSessionResponse, AuthUser, Role } from '@/types';
+import type { AuthSessionResponse, AuthUser, Permission, Role } from '@/types';
 
 export const AUTH_SESSION_QUERY_KEY = ['auth', 'me'] as const;
 
@@ -27,6 +29,8 @@ interface AuthContextValue {
   activeRoles: Role[];
   hasActiveRole: (role: Role) => boolean;
   hasAnyActiveRole: (roles: Role[]) => boolean;
+  hasPermission: (permission: Permission) => boolean;
+  hasAnyPermission: (permissions: Permission[]) => boolean;
   login: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 }
@@ -95,6 +99,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
+  const hasPermission = useCallback(
+    (permission: Permission) => checkPermission(user, permission),
+    [user],
+  );
+
+  const hasAnyPermission = useCallback(
+    (permissions: Permission[]) => checkAnyPermission(user, permissions),
+    [user],
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -105,6 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         activeRoles: user?.activeRoles ?? [],
         hasActiveRole,
         hasAnyActiveRole,
+        hasPermission,
+        hasAnyPermission,
         login,
         logout,
       }}

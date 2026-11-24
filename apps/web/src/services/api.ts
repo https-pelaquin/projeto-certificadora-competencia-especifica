@@ -1,5 +1,7 @@
 import { apiClient } from '@/lib/api-client';
+import { resolvePrimaryRole } from '@/lib/auth-rules';
 import type {
+  AuthMeResponse,
   AuthSessionResponse,
   AuthUser,
   LoginPayload,
@@ -22,26 +24,50 @@ export {
   endProfileTenure,
 } from '@/features/users/api';
 
-export function fetchCurrentSession(): Promise<AuthSessionResponse> {
+function normalizeAuthUser(response: AuthMeResponse): AuthUser {
+  const now = new Date().toISOString();
+  const roles = response.roles;
+  return {
+    id: String(response.id),
+    name: response.name,
+    email: response.email,
+    active: true,
+    profiles: roles.map((role, index) => ({
+      id: `session-${index}-${role}`,
+      role,
+      startsAt: now,
+      endsAt: null,
+    })),
+    activeRoles: roles,
+    availableRoles: roles,
+    activeRole: resolvePrimaryRole(roles),
+    permissions: response.permissions,
+  };
+}
+
+export async function fetchCurrentSession(): Promise<AuthSessionResponse> {
   const isOnLoginPage =
     typeof window !== 'undefined' && window.location.pathname === '/login';
 
-  return apiClient.get<AuthSessionResponse>('/api/auth/me', {
+  const response = await apiClient.get<AuthMeResponse>('/api/auth/me', {
     skipErrorToast: isOnLoginPage,
     skipAuthRedirect: isOnLoginPage,
   });
+  return { authenticated: true, user: normalizeAuthUser(response) };
 }
 
-export function loginWithCredentials(
+export async function loginWithCredentials(
   payload: LoginPayload,
 ): Promise<LoginResponse> {
-  return apiClient.post<LoginResponse>('/api/auth/login', payload, {
+  await apiClient.post<void>('/api/auth/login', payload, {
     skipAuthRedirect: true,
   });
+  const session = await fetchCurrentSession();
+  return { user: session.user! };
 }
 
-export function logoutSession(): Promise<{ success: boolean }> {
-  return apiClient.post<{ success: boolean }>('/api/auth/logout', undefined, {
+export function logoutSession(): Promise<void> {
+  return apiClient.post<void>('/api/auth/logout', undefined, {
     skipAuthRedirect: true,
     skipErrorToast: true,
   });
@@ -54,17 +80,17 @@ export function updateMyAvatar(
 }
 
 export function forgotPassword(email: string): Promise<{ message: string }> {
-  return apiClient.post<{ message: string }>('/api/auth/forgot-password', {
-    email,
-  });
+  return apiClient.post<void>('/api/auth/forgot-password', { email }).then(() => ({
+    message: 'Se o e-mail estiver cadastrado, as instruções foram enviadas.',
+  }));
 }
 
 export function resetPassword(
   token: string,
   newPassword: string,
 ): Promise<{ message: string }> {
-  return apiClient.post<{ message: string }>('/api/auth/reset-password', {
+  return apiClient.post<void>('/api/auth/reset-password', {
     token,
-    newPassword,
-  });
+    password: newPassword,
+  }).then(() => ({ message: 'Senha redefinida com sucesso.' }));
 }

@@ -1,4 +1,4 @@
-import type { AuthUser, ProfileTenure, Role } from '@/types';
+import type { AuthUser, Permission, ProfileTenure, Role } from '@/types';
 
 const ROLE_PRIORITY: Role[] = [
   'HEAD',
@@ -82,4 +82,26 @@ export function resolvePrimaryRole(activeRoles: Role[]): Role | null {
     }
   }
   return activeRoles[0] ?? null;
+}
+
+export function hasPermission(
+  user: AuthUser | null | undefined,
+  permission: Permission,
+): boolean {
+  return Boolean(user?.permissions.includes(permission));
+}
+
+export function hasAnyPermission(
+  user: AuthUser | null | undefined,
+  permissions: Permission[],
+): boolean {
+  return permissions.some((permission) => hasPermission(user, permission));
+}
+
+export function getHomePath(roles: Role[]): string {
+  if (roles.includes('HEAD')) return '/financeiro';
+  if (roles.includes('COUNCIL_MEMBER')) return '/deliberacoes';
+  if (roles.includes('FINANCIAL_ADMIN')) return '/financeiro';
+  if (roles.includes('PROFESSOR')) return '/docente';
+  return '/acesso-negado';
 }
