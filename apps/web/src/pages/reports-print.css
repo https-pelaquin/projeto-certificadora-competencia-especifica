@@ -1,0 +1,74 @@
+/* Estilos de impressão exclusivos da página de Relatórios. */
+@media print {
+  html:has(#relatorio-financeiro),
+  body:has(#relatorio-financeiro),
+  body:has(#relatorio-financeiro) #root {
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* O ShellLayout usa h-screen e overflow-hidden para a visualização em tela.
+     Na impressão, essas restrições limitariam o relatório a uma página. */
+  body:has(#relatorio-financeiro) #root > div:has(#relatorio-financeiro),
+  body:has(#relatorio-financeiro) #root > div:has(#relatorio-financeiro) > div:has(#relatorio-financeiro) {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  /* Não imprimir barra lateral nem cabeçalho do sistema. */
+  body:has(#relatorio-financeiro) #root aside,
+  body:has(#relatorio-financeiro) #root header,
+  #relatorio-financeiro > .print\:hidden {
+    display: none !important;
+  }
+
+  body:has(#relatorio-financeiro) #root main {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: white !important;
+  }
+
+  body:has(#relatorio-financeiro) #root main > div {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  #relatorio-financeiro {
+    width: 100% !important;
+    color: #111827;
+  }
+
+  /* Tabelas em coluna única para caber melhor no papel. */
+  #relatorio-financeiro > div.grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  #relatorio-financeiro section[aria-label='Resumo financeiro anual'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  #relatorio-financeiro .overflow-hidden,
+  #relatorio-financeiro .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /* Preservar cards e linhas sem cortes ao mudar de página. */
+  #relatorio-financeiro article,
+  #relatorio-financeiro tr,
+  #relatorio-financeiro section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

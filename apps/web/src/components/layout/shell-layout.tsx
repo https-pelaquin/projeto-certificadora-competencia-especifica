@@ -79,6 +79,18 @@ const ALL_NAV_ITEMS: NavItem[] = [
     path: '/usuarios',
     roles: ['HEAD'],
   },
+  {
+    label: 'Análise Financeira',
+    icon: LayoutDashboard,
+    path: '/analise-financeira',
+    roles: ['HEAD', 'FINANCIAL_ADMIN'],
+  },
+  {
+    label: 'Relatórios',
+    icon: FileText,
+    path: '/relatorios',
+    roles: ['HEAD', 'FINANCIAL_ADMIN'],
+  },
 ];
 
 export function ShellLayout() {
