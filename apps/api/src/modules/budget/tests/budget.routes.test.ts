@@ -159,19 +159,23 @@ describe("ajustes e histórico", () => {
     });
 });
 
+// Datas relativas a hoje: o limite novo não pode começar no passado.
+const inDays = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
+
 describe("limite de aprovação", () => {
     it("cadastra, lista o mais recente primeiro e encerra o anterior", async () => {
         const { agent } = await as("HEAD");
 
-        const first = await agent.post("/api/approval-limits").send({ amount: "1000", periodMonths: 6, validFrom: "2026-01-01T00:00:00Z" });
+        const first = await agent.post("/api/approval-limits").send({ amount: "1000", periodMonths: 6, validFrom: inDays(-300) });
         expect(first.status).toBe(201);
         expect(first.body).toMatchObject({ amount: "1000.00", periodMonths: 6, validUntil: null });
 
-        await agent.post("/api/approval-limits").send({ amount: "3000.00", periodMonths: 12, validFrom: "2026-06-01T00:00:00Z" });
+        const secondFrom = inDays(30);
+        await agent.post("/api/approval-limits").send({ amount: "3000.00", periodMonths: 12, validFrom: secondFrom });
 
         const list = await agent.get("/api/approval-limits");
         expect(list.body.map((l: { amount: string }) => l.amount)).toEqual(["3000.00", "1000.00"]);
-        expect(list.body[1].validUntil).toBe("2026-06-01T00:00:00.000Z");
+        expect(list.body[1].validUntil).toBe(secondFrom);
         expect(list.body[0].validUntil).toBeNull();
     });
 
@@ -184,10 +188,19 @@ describe("limite de aprovação", () => {
 
     it("início anterior ao último limite dá 422", async () => {
         const { agent } = await as("HEAD");
-        await agent.post("/api/approval-limits").send({ amount: "1000.00", periodMonths: 6, validFrom: "2026-06-01T00:00:00Z" });
-        const res = await agent.post("/api/approval-limits").send({ amount: "2000.00", periodMonths: 6, validFrom: "2026-03-01T00:00:00Z" });
+        await agent.post("/api/approval-limits").send({ amount: "1000.00", periodMonths: 6, validFrom: inDays(60) });
+        const res = await agent.post("/api/approval-limits").send({ amount: "2000.00", periodMonths: 6, validFrom: inDays(30) });
         expect(res.status).toBe(422);
         expect(await prisma.approvalLimit.count()).toBe(1);
+    });
+
+    it("início no passado, com limite anterior, dá 422 e não reescreve o anterior", async () => {
+        const { agent } = await as("HEAD");
+        await agent.post("/api/approval-limits").send({ amount: "1000.00", periodMonths: 6, validFrom: inDays(-300) });
+        const res = await agent.post("/api/approval-limits").send({ amount: "2000.00", periodMonths: 6, validFrom: inDays(-10) });
+        expect(res.status).toBe(422);
+        expect(await prisma.approvalLimit.count()).toBe(1);
+        expect((await prisma.approvalLimit.findFirstOrThrow()).validUntil).toBeNull();
     });
 
     it("valida valor, período e data", async () => {
