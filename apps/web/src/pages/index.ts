@@ -11,3 +11,4 @@ export { RequestDetailPage } from './request-detail';
 export { OperationalRequestsPage } from './operational-requests';
 export { default as AnalyticsPage } from './analytics';
 export { default as ReportsPage } from './reports';
+export { AuditPage } from './audit';

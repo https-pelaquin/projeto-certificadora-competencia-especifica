@@ -8,6 +8,7 @@ import { ShellLayout } from '@/components/layout/shell-layout';
 import { ProtectedRoute } from '@/components/layout/protected-route';
 import {
   AnalyticsPage,
+  AuditPage,
   CategoriesPage,
   FinancePage,
   LoginPage,
@@ -114,6 +115,15 @@ export default function App() {
                     element={
                       <ProtectedRoute allowedPermissions={['categories:manage']}>
                         <CategoriesPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/auditoria"
+                    element={
+                      <ProtectedRoute allowedPermissions={['audit:read']}>
+                        <AuditPage />
                       </ProtectedRoute>
                     }
                   />
