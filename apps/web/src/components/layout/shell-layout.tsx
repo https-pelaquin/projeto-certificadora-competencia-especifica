@@ -29,7 +29,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   path: string;
-  roles: Role[];
+  roles?: Role[];
   permissions?: Permission[];
 }
 
@@ -83,13 +83,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     label: 'Análise Financeira',
     icon: LayoutDashboard,
     path: '/analise-financeira',
-    roles: ['HEAD', 'FINANCIAL_ADMIN'],
+    permissions: ['dashboard:read'],
   },
   {
     label: 'Relatórios',
     icon: FileText,
     path: '/relatorios',
-    roles: ['HEAD', 'FINANCIAL_ADMIN'],
+    permissions: ['reports:read'],
   },
 ];
 
@@ -101,9 +101,9 @@ export function ShellLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Exibe apenas as rotas cujos perfis exigidos estejam vigentes na sessão atual
+  // Exibe os itens conforme os perfis e as permissoes exigidos
   const navItems = ALL_NAV_ITEMS.filter(
-    (item) => hasAnyActiveRole(item.roles) && (!item.permissions || hasAnyPermission(item.permissions)),
+    (item) => (!item.roles || hasAnyActiveRole(item.roles)) && (!item.permissions || hasAnyPermission(item.permissions)),
   );
 
   const handleLogout = async () => {
