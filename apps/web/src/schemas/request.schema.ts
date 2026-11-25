@@ -1,17 +1,8 @@
 import { z } from 'zod';
 import { isAmountLocked } from '@/features/requests/utils/request-state-machine';
-import type { ExpenseCategory, RequestStatus } from '@/types';
-
-const EXPENSE_CATEGORIES = [
-  'MATERIAL_CONSUMO',
-  'SERVICOS_TERCEIROS',
-  'EQUIPAMENTOS',
-  'DIARIAS_PASSAGENS',
-  'OUTROS',
-] as const satisfies readonly ExpenseCategory[];
+import type { RequestStatus } from '@/types';
 
 const REQUEST_STATUSES = [
-  'DRAFT',
   'AWAITING_VOTING',
   'IN_VOTING',
   'AWAITING_COMPLEMENT',
@@ -22,42 +13,54 @@ const REQUEST_STATUSES = [
   'CANCELED',
 ] as const satisfies readonly RequestStatus[];
 
-export const expenseCategorySchema = z.enum(EXPENSE_CATEGORIES, {
-  message: 'Selecione a categoria da despesa',
-});
+const moneyPattern = /^(?:\d{1,12}(?:\.\d{3})*,\d{2}|\d{1,12}(?:\.\d{1,2})?)$/;
+
+function parseMoneyString(value: string): number {
+  const normalized = value.includes(',')
+    ? value.replace(/\./g, '').replace(',', '.')
+    : value;
+  return Number(normalized);
+}
+
+export const requestCategoryIdSchema = z
+  .number({ message: 'Selecione a categoria da despesa' })
+  .int('Selecione uma categoria válida')
+  .positive('Selecione a categoria da despesa');
 
 export const requestStatusSchema = z.enum(REQUEST_STATUSES);
 
 /**
  * Schema compartilhado para validação monetária em reais (R$).
- * Garante valor estritamente positivo (> 0) para respeitar a constraint do banco de dados.
+ * Aceita string mascarada ("1.500,00") ou decimal ("1500.00") estritamente positiva (> 0).
  */
 export const requestAmountSchema = z
-  .number({ message: 'O valor deve ser maior que zero' })
-  .refine((val) => Number.isFinite(val), {
-    message: 'Informe um valor numérico válido',
-  })
-  .min(0.01, 'O valor deve ser maior que zero');
+  .string({ message: 'O valor deve ser maior que zero' })
+  .trim()
+  .min(1, 'O valor deve ser maior que zero')
+  .regex(moneyPattern, 'Informe um valor monetário válido')
+  .refine((val) => Number.isFinite(parseMoneyString(val)) && parseMoneyString(val) > 0, {
+    message: 'O valor deve ser maior que zero',
+  });
 
 export const requestDescriptionSchema = z
   .string()
   .trim()
   .min(10, 'A justificativa/descrição deve conter pelo menos 10 caracteres')
-  .max(500, 'A justificativa não pode ultrapassar 500 caracteres');
+  .max(2000, 'A justificativa não pode ultrapassar 2000 caracteres');
 
 /**
  * Schema do modal "Novo Pedido".
- * Exige categoria, justificativa e valor em reais >= R$ 0,01.
+ * Exige categoryId, justificativa e valor em reais >= R$ 0,01.
  */
 export const createRequestSchema = z.object({
-  category: expenseCategorySchema,
+  categoryId: requestCategoryIdSchema,
   amount: requestAmountSchema,
   description: requestDescriptionSchema,
 });
 
 export type CreateRequestFormValues = z.infer<typeof createRequestSchema>;
 
-const editableRequestBaseSchema = createRequestSchema.omit({ category: true });
+const editableRequestBaseSchema = createRequestSchema.omit({ categoryId: true });
 const lockedUpdateRequestSchema = editableRequestBaseSchema.omit({ amount: true });
 
 /**
@@ -95,6 +98,6 @@ export const updateRequestSchema = z
 
 export type UpdateRequestFormValues = {
   description: string;
-  amount?: number;
+  amount?: string;
 };
 

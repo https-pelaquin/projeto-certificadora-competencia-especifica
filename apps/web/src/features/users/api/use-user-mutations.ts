@@ -67,11 +67,11 @@ export function useEndProfileTenure() {
   return useMutation({
     mutationFn: ({
       userId,
-      profileId,
+      assignmentId,
     }: {
-      userId: string;
-      profileId: string;
-    }) => endProfileTenure(userId, profileId),
+      userId: number;
+      assignmentId: number;
+    }) => endProfileTenure(userId, assignmentId),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: usersQueryKeys.all }),

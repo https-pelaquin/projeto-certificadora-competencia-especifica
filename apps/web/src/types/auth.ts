@@ -40,16 +40,25 @@ export interface ProfileTenure {
   endsAt: string | null;
 }
 
-/** Usuário do sistema (soft-disable via active: boolean) */
+/** Atribuição de perfil retornada pela API de usuários (`/api/users`) */
+export interface RoleAssignment {
+  id: number;
+  role: Role;
+  startsAt: string; // ISO 8601
+  endsAt: string | null;
+  current: boolean;
+}
+
+/** Usuário do sistema (`GET /api/users`) */
 export interface User {
-  id: string;
+  id: number;
   name: string;
   email: string;
   active: boolean;
-  avatarUrl?: string | null;
-  profiles: ProfileTenure[];
+  invitePending?: boolean;
+  roles: Role[];
+  roleAssignments: RoleAssignment[];
   createdAt: string;
-  updatedAt: string;
 }
 
 /** Dados de sessão do usuário autenticado via cookie httpOnly (GET /api/auth/me) */
@@ -58,8 +67,6 @@ export interface AuthUser {
   name: string;
   email: string;
   active: boolean;
-  avatarUrl?: string | null;
-  profiles: ProfileTenure[];
   activeRoles: Role[];
   activeRole: Role | null;
   availableRoles: Role[];
@@ -92,30 +99,23 @@ export interface LoginResponse {
   user: AuthUser;
 }
 
-/** Payload de convite de usuário */
+/** Payload de convite de usuário (`POST /api/users`) */
 export interface InviteUserPayload {
   email: string;
   name: string;
-  role: Role;
-  startsAt: string;
-  endsAt?: string | null;
+  roles: Role[];
 }
 
-/** Payload de atribuição de novo perfil a usuário existente */
+/** Payload de atribuição de novo perfil a usuário existente (`POST /api/users/:id/roles`) */
 export interface AssignProfilePayload {
-  userId: string;
+  userId: number;
   role: Role;
-  startsAt: string;
-  endsAt?: string | null;
+  startsAt?: string;
+  endsAt?: string;
 }
 
-/** Payload de alteração de status ativo/inativo do usuário */
+/** Payload de alteração de status ativo/inativo do usuário (`PATCH /api/users/:id`) */
 export interface UpdateUserStatusPayload {
-  userId: string;
+  userId: number;
   active: boolean;
-}
-
-/** Payload de atualização da foto de perfil do usuário autenticado */
-export interface UpdateAvatarPayload {
-  avatarUrl: string | null;
 }

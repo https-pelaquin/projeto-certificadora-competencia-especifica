@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, UploadCloud, FileCheck, AlertCircle, Lock } from 'lucide-react';
+import { Loader2, AlertCircle, Lock } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CurrencyInput } from '@/components/shared';
+import { useCategories } from '@/features/finance/api/use-finance';
 import {
   useCreateRequest,
   useUpdateRequest,
@@ -30,12 +31,9 @@ import {
   createRequestSchema,
   createUpdateRequestSchema,
 } from '@/schemas';
-import { applyCurrencyMask, parseCurrencyToCents } from '@/lib/utils';
-import {
-  EXPENSE_CATEGORY_LABELS,
-  type ExpenseCategory,
-  type Request,
-} from '@/types';
+import { moneyToApi } from '@/schemas/finance.schema';
+import { applyCurrencyMask } from '@/lib/utils';
+import type { Request } from '@/types';
 
 interface RequestModalProps {
   open: boolean;
@@ -45,9 +43,15 @@ interface RequestModalProps {
 }
 
 interface RequestModalFormValues {
-  category?: ExpenseCategory;
-  amount?: number;
+  categoryId?: number;
+  amount?: string;
   description: string;
+}
+
+function formatApiMoneyToMask(amount: string): string {
+  const numeric = Number(amount);
+  if (!Number.isFinite(numeric) || numeric <= 0) return '';
+  return applyCurrencyMask(numeric.toFixed(2));
 }
 
 export function RequestModal({
@@ -60,7 +64,17 @@ export function RequestModal({
   const lockedAmount =
     isAmountLockedProp ?? (request ? checkAmountLocked(request.status) : false);
 
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const { data: categories = [], isLoading: isLoadingCategories } = useCategories();
+  const availableCategories = useMemo(() => {
+    const active = categories.filter((c) => c.active);
+    if (request && !active.some((c) => c.id === request.category.id)) {
+      return [
+        { id: request.category.id, name: request.category.name, active: false },
+        ...active,
+      ];
+    }
+    return active;
+  }, [categories, request]);
 
   const createMutation = useCreateRequest();
   const updateMutation = useUpdateRequest();
@@ -78,15 +92,19 @@ export function RequestModal({
     register,
     handleSubmit,
     reset,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<RequestModalFormValues>({
     resolver: zodResolver(activeSchema),
     defaultValues: {
-      category: 'MATERIAL_CONSUMO',
-      amount: 0,
+      categoryId: undefined,
+      amount: '',
       description: '',
     },
   });
+
+  const selectedCategoryId = watch('categoryId');
 
   useEffect(() => {
     if (!open) return;
@@ -96,23 +114,27 @@ export function RequestModal({
 
     if (request) {
       reset({
-        category: request.category,
+        categoryId: request.category.id,
         ...(checkAmountLocked(request.status)
           ? {}
-          : { amount: request.amount / 100 }),
+          : { amount: formatApiMoneyToMask(request.amount) }),
         description: request.description,
       });
-      setSelectedFileName(request.attachmentName ?? null);
     } else {
       reset({
-        category: 'MATERIAL_CONSUMO',
-        amount: 0,
+        categoryId: availableCategories[0]?.id,
+        amount: '',
         description: '',
       });
-      setSelectedFileName(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, request, reset]);
+
+  useEffect(() => {
+    if (open && !isEditing && !selectedCategoryId && availableCategories[0]) {
+      setValue('categoryId', availableCategories[0].id);
+    }
+  }, [open, isEditing, selectedCategoryId, availableCategories, setValue]);
 
   const onSubmit = async (data: RequestModalFormValues) => {
     if (isEditing && request) {
@@ -120,18 +142,16 @@ export function RequestModal({
         id: request.id,
         payload: {
           description: data.description,
-          ...(!lockedAmount && data.amount !== undefined
-            ? { amount: Math.round(data.amount * 100) }
+          ...(!lockedAmount && data.amount
+            ? { amount: moneyToApi(data.amount) }
             : {}),
-          ...(selectedFileName ? { attachmentName: selectedFileName } : {}),
         },
       });
-    } else {
+    } else if (data.categoryId) {
       await createMutation.mutateAsync({
-        category: data.category ?? 'MATERIAL_CONSUMO',
+        categoryId: data.categoryId,
         description: data.description,
-        amount: Math.round((data.amount ?? 0) * 100),
-        ...(selectedFileName ? { attachmentName: selectedFileName } : {}),
+        amount: moneyToApi(data.amount ?? '0'),
       });
     }
 
@@ -139,7 +159,7 @@ export function RequestModal({
   };
 
   const formattedLockedAmount = request
-    ? applyCurrencyMask(String(request.amount))
+    ? formatApiMoneyToMask(request.amount)
     : '';
 
   return (
@@ -170,41 +190,46 @@ export function RequestModal({
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-slate-700">Categoria de Despesa *</Label>
             <Controller
-              name="category"
+              name="categoryId"
               control={control}
               render={({ field }) => (
                 <Select
-                  value={field.value ?? 'MATERIAL_CONSUMO'}
-                  onValueChange={(val) => val && field.onChange(val as ExpenseCategory)}
-                  disabled={isEditing}
+                  value={field.value ? String(field.value) : ''}
+                  onValueChange={(val) => val && field.onChange(Number(val))}
+                  disabled={isEditing || isLoadingCategories}
                 >
                   <SelectTrigger data-testid="select-category" className="w-full bg-white">
                     <SelectValue>
-                      {(val: string | null) =>
-                        val
-                          ? EXPENSE_CATEGORY_LABELS[val as ExpenseCategory] ?? val
-                          : 'Selecione a categoria'
-                      }
+                      {(val: string | null) => {
+                        if (!val) {
+                          return isLoadingCategories
+                            ? 'Carregando categorias...'
+                            : 'Selecione a categoria';
+                        }
+                        return (
+                          availableCategories.find((cat) => String(cat.id) === val)?.name ??
+                          request?.category.name ??
+                          'Selecione a categoria'
+                        );
+                      }}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.entries(EXPENSE_CATEGORY_LABELS) as [ExpenseCategory, string][]).map(
-                      ([catKey, label]) => (
-                        <SelectItem
-                          key={catKey}
-                          value={catKey}
-                          data-testid={`select-category-option-${catKey}`}
-                        >
-                          {label}
-                        </SelectItem>
-                      ),
-                    )}
+                    {availableCategories.map((cat) => (
+                      <SelectItem
+                        key={cat.id}
+                        value={String(cat.id)}
+                        data-testid={`select-category-option-${cat.id}`}
+                      >
+                        {cat.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               )}
             />
-            {errors.category && (
-              <p className="text-xs text-red-500 font-medium">{errors.category.message}</p>
+            {errors.categoryId && (
+              <p className="text-xs text-red-500 font-medium">{errors.categoryId.message}</p>
             )}
           </div>
 
@@ -235,24 +260,16 @@ export function RequestModal({
               <Controller
                 name="amount"
                 control={control}
-                render={({ field }) => {
-                  const displayValue =
-                    typeof field.value === 'number' && field.value > 0
-                      ? applyCurrencyMask(String(Math.round(field.value * 100)))
-                      : '';
-                  return (
-                    <CurrencyInput
-                      data-testid="input-amount"
-                      value={displayValue}
-                      onValueChange={(masked) => {
-                        const cents = masked ? parseCurrencyToCents(masked) : 0;
-                        field.onChange(Number.isNaN(cents) ? 0 : cents / 100);
-                      }}
-                      placeholder="0,00"
-                      className="bg-white"
-                    />
-                  );
-                }}
+                render={({ field }) => (
+                  <CurrencyInput
+                    data-testid="input-amount"
+                    value={field.value ?? ''}
+                    onValueChange={field.onChange}
+                    onBlur={field.onBlur}
+                    placeholder="0,00"
+                    className="bg-white"
+                  />
+                )}
               />
             )}
             {!lockedAmount && errors.amount && (
@@ -280,43 +297,6 @@ export function RequestModal({
                 {errors.description.message}
               </p>
             )}
-          </div>
-
-          {/* Visual file attachment area */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-slate-700">Anexo Comprobatório / Orçamento</Label>
-            <label
-              htmlFor="file-upload"
-              className="border-2 border-dashed border-slate-300 hover:border-emerald-600 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors bg-slate-50/50 hover:bg-emerald-50/20 group"
-            >
-              <input
-                id="file-upload"
-                data-testid="input-attachment"
-                type="file"
-                className="hidden"
-                accept=".pdf,.png,.jpg,.jpeg"
-                onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    setSelectedFileName(e.target.files[0].name);
-                  }
-                }}
-              />
-              {selectedFileName ? (
-                <div className="flex items-center gap-2 text-emerald-800">
-                  <FileCheck className="h-5 w-5 text-emerald-600" />
-                  <span className="text-xs font-semibold truncate max-w-xs">{selectedFileName}</span>
-                  <span className="text-[10px] text-slate-400">(Clique para substituir)</span>
-                </div>
-              ) : (
-                <>
-                  <UploadCloud className="h-7 w-7 text-slate-400 group-hover:text-emerald-700 transition-colors mb-1" />
-                  <p className="text-xs font-medium text-slate-700">
-                    Clique para selecionar arquivo de cotação ou orçamento
-                  </p>
-                  <p className="text-[11px] text-slate-400 mt-0.5">PDF, PNG ou JPG (até 10MB)</p>
-                </>
-              )}
-            </label>
           </div>
 
           {activeMutation.isError && (

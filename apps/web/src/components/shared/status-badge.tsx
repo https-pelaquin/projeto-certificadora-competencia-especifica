@@ -8,7 +8,6 @@ import { REQUEST_STATUS_LABELS, type RequestStatus } from '@/types';
 // - Azul: Utilizado
 // - Vermelho: Rejeitado / Cancelado (REJECTED, CANCELED)
 const statusStyles: Record<RequestStatus, string> = {
-  DRAFT: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-100',
   AWAITING_VOTING: 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-50',
   IN_VOTING: 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100',
   AWAITING_COMPLEMENT: 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-50',

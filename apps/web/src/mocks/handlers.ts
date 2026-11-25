@@ -4,16 +4,13 @@ import {
   isAmountLocked,
 } from '@/features/requests/utils/request-state-machine';
 import {
-  computeFinancialSummary,
   findActiveHeadUser,
   getSessionUserId,
   mockDb,
   numericUserId,
   operationalDb,
   permissionsForUser,
-  saveUserAvatar,
   setSessionUserId,
-  stringUserId,
   toAuthUser,
 } from './db';
 import type {
@@ -22,9 +19,7 @@ import type {
   InviteUserPayload,
   LoginPayload,
   Permission,
-  ProfileTenure,
-  Request,
-  UpdateAvatarPayload,
+  RoleAssignment,
   UpdateRequestPayload,
   User,
 } from '@/types';
@@ -55,14 +50,6 @@ import type {
   VotingStatus,
 } from '@/types/voting';
 
-const VALID_CATEGORIES = new Set([
-  'MATERIAL_CONSUMO',
-  'SERVICOS_TERCEIROS',
-  'EQUIPAMENTOS',
-  'DIARIAS_PASSAGENS',
-  'OUTROS',
-]);
-
 function errorResponse(status: number, code: string, message: string) {
   return HttpResponse.json({ error: { code, message } }, { status });
 }
@@ -74,14 +61,15 @@ function sessionActor(): {
 } | null {
   const sessionId = getSessionUserId();
   if (!sessionId) return null;
-  const user = mockDb.users.find((candidate) => candidate.id === sessionId);
   const id = numericUserId(sessionId);
-  if (!user?.active || id === null) return null;
+  if (id === null) return null;
+  const user = mockDb.users.find((candidate) => candidate.id === id);
+  if (!user?.active) return null;
   return { user, id, permissions: permissionsForUser(user) };
 }
 
 function person(id: number): OperationalPerson {
-  const user = mockDb.users.find((candidate) => candidate.id === stringUserId(id));
+  const user = mockDb.users.find((candidate) => candidate.id === id);
   return { id, name: user?.name ?? `Usuário ${id}` };
 }
 
@@ -223,7 +211,7 @@ function canSeeVoting(
     target &&
       (target.requester.id === actor.id ||
         voting.memberIds.includes(actor.id) ||
-        actor.user.profiles.some((profile) => profile.role === 'HEAD') ||
+        actor.user.roleAssignments.some((profile) => profile.role === 'HEAD') ||
         actor.permissions.includes('requests:readAll')),
   );
 }
@@ -286,32 +274,6 @@ async function handleOperationalCancel(
   return HttpResponse.json(target);
 }
 
-async function handleCancelRequest(id: string) {
-  await delay(500);
-  const idx = mockDb.requests.findIndex((r) => r.id === id);
-  if (idx === -1) {
-    return errorResponse(404, 'REQUEST_NOT_FOUND', 'Solicitação não encontrada.');
-  }
-
-  const existing = mockDb.requests[idx];
-  if (!canModifyRequest(existing.status)) {
-    return errorResponse(
-      409,
-      'REQUEST_IMMUTABLE',
-      'Solicitações pagas, rejeitadas ou já canceladas não podem ser canceladas.',
-    );
-  }
-
-  const canceled: Request = {
-    ...existing,
-    status: 'CANCELED',
-    updatedAt: new Date().toISOString(),
-  };
-  mockDb.requests[idx] = canceled;
-
-  return HttpResponse.json(canceled, { status: 200 });
-}
-
 export const handlers = [
   // ============================================================
   // Autenticação e Sessão (/api/auth/*)
@@ -327,7 +289,8 @@ export const handlers = [
       );
     }
 
-    const user = mockDb.users.find((u) => u.id === sessionUserId);
+    const id = numericUserId(sessionUserId);
+    const user = mockDb.users.find((u) => u.id === id);
     if (!user) {
       return errorResponse(401, 'USER_NOT_FOUND', 'Sessão inválida.');
     }
@@ -344,7 +307,7 @@ export const handlers = [
     const authUser = toAuthUser(user);
     return HttpResponse.json(
       {
-        id: numericUserId(user.id) ?? user.id,
+        id: user.id,
         name: authUser.name,
         email: authUser.email,
         roles: authUser.activeRoles,
@@ -359,7 +322,7 @@ export const handlers = [
     const body = (await request.json()) as Partial<LoginPayload>;
     const normalizedEmail = body.email?.trim().toLowerCase() ?? '';
 
-    if (!normalizedEmail || !body.password || body.password.length < 6) {
+    if (!normalizedEmail || !body.password || body.password.length < 8) {
       return errorResponse(400, 'INVALID_CREDENTIALS', 'Credenciais inválidas.');
     }
 
@@ -383,7 +346,7 @@ export const handlers = [
       );
     }
 
-    setSessionUserId(user.id);
+    setSessionUserId(String(user.id));
     return new HttpResponse(null, { status: 204 });
   }),
 
@@ -393,66 +356,13 @@ export const handlers = [
     return new HttpResponse(null, { status: 204 });
   }),
 
-  http.patch('/api/auth/me/avatar', async ({ request }) => {
-    await delay(300);
-    const sessionUserId = getSessionUserId();
-    if (!sessionUserId) {
-      return errorResponse(
-        401,
-        'SESSION_EXPIRED',
-        'Sessão não autenticada ou expirada.',
-      );
-    }
-
-    const userIdx = mockDb.users.findIndex((u) => u.id === sessionUserId);
-    if (userIdx === -1) {
-      return errorResponse(401, 'USER_NOT_FOUND', 'Sessão inválida.');
-    }
-
-    const existing = mockDb.users[userIdx];
-    if (!existing.active) {
-      return errorResponse(
-        403,
-        'USER_INACTIVE',
-        'Usuário desativado no sistema.',
-      );
-    }
-
-    const body = (await request.json()) as Partial<UpdateAvatarPayload>;
-    const avatarUrl = body.avatarUrl ?? null;
-
-    if (
-      avatarUrl !== null &&
-      (typeof avatarUrl !== 'string' ||
-        !/^(https?:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/.test(
-          avatarUrl,
-        ))
-    ) {
-      return errorResponse(
-        400,
-        'INVALID_AVATAR',
-        'Formato de imagem inválido. Utilize PNG, JPG ou WEBP.',
-      );
-    }
-
-    const updatedUser: User = {
-      ...existing,
-      avatarUrl,
-      updatedAt: new Date().toISOString(),
-    };
-    mockDb.users[userIdx] = updatedUser;
-    saveUserAvatar(updatedUser.id, avatarUrl);
-
-    return HttpResponse.json({ user: toAuthUser(updatedUser) }, { status: 200 });
-  }),
-
-  http.post('/api/auth/forgot-password', async ({ request }) => {
+  http.post('/api/auth/password/forgot', async ({ request }) => {
     await delay(350);
     await request.json();
     return new HttpResponse(null, { status: 204 });
   }),
 
-  http.post('/api/auth/reset-password', async () => {
+  http.post('/api/auth/password/reset', async () => {
     await delay(350);
     return new HttpResponse(null, { status: 204 });
   }),
@@ -461,166 +371,180 @@ export const handlers = [
   // Solicitações Financeiras (/api/requests)
   // ============================================================
   http.get('/api/requests', async ({ request }) => {
-    await delay(400);
-    const status = new URL(request.url).searchParams.get('status');
-    if (status) {
-      const actor = sessionActor();
-      if (!actor) return errorResponse(401, 'UNAUTHORIZED', 'Autenticação necessária');
-      const visible = operationalDb.requests.filter((item) =>
-        item.status === status && canAccessOperationalRequest(item, actor),
-      );
-      return HttpResponse.json({
-        items: visible.map((item) => ({
-          id: item.id,
-          status: item.status,
-          description: item.description,
-          amount: item.amount,
-          createdAt: item.createdAt,
-          updatedAt: item.updatedAt,
-          requester: item.requester,
-          category: item.category,
-        })),
-        page: 1,
-        pageSize: 100,
-        total: visible.length,
-      });
-    }
-    const data = [...mockDb.requests];
-    const summary = computeFinancialSummary(data);
+    await delay(250);
+    const actor = sessionActor();
+    if (!actor) return errorResponse(401, 'UNAUTHORIZED', 'Autenticação necessária');
 
-    return HttpResponse.json(
-      {
-        data,
-        summary,
-        total: data.length,
-        page: 1,
-        pageSize: 20,
-        totalPages: 1,
-      },
-      { status: 200 },
+    const url = new URL(request.url);
+    const status = url.searchParams.get('status');
+    const page = Math.max(1, Number(url.searchParams.get('page') ?? '1') || 1);
+    const pageSize = Math.max(1, Number(url.searchParams.get('pageSize') ?? '20') || 20);
+
+    const visible = operationalDb.requests.filter(
+      (item) =>
+        canAccessOperationalRequest(item, actor) &&
+        (!status || item.status === status),
     );
+    const start = (page - 1) * pageSize;
+    const paged = visible.slice(start, start + pageSize);
+
+    return HttpResponse.json({
+      items: paged.map((item) => ({
+        id: item.id,
+        status: item.status,
+        description: item.description,
+        amount: item.amount,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        requester: item.requester,
+        category: item.category,
+      })),
+      page,
+      pageSize,
+      total: visible.length,
+    });
   }),
 
   http.post('/api/requests', async ({ request }) => {
-    await delay(450);
-    const body = (await request.json()) as Partial<CreateRequestPayload>;
-
-    if (!body.category || !VALID_CATEGORIES.has(body.category)) {
-      return errorResponse(
-        400,
-        'INVALID_CATEGORY',
-        'Categoria de despesa inválida.',
-      );
+    await delay(300);
+    const actor = sessionActor();
+    if (!actor) return errorResponse(401, 'UNAUTHORIZED', 'Autenticação necessária');
+    if (!hasPermission(actor, 'requests:create')) {
+      return errorResponse(403, 'FORBIDDEN', 'Permissão insuficiente');
     }
 
-    if (
-      typeof body.amount !== 'number' ||
-      !Number.isFinite(body.amount) ||
-      body.amount <= 0
-    ) {
+    const body = (await request.json()) as Partial<CreateRequestPayload>;
+    const category = operationalDb.categories.find(
+      (c) => c.id === Number(body.categoryId),
+    );
+    if (!category) {
+      return errorResponse(422, 'BUSINESS_RULE', 'Categoria inválida');
+    }
+    if (!category.active) {
+      return errorResponse(422, 'BUSINESS_RULE', 'Esta categoria está inativa');
+    }
+
+    const numericAmount = typeof body.amount === 'string' ? Number(body.amount) : NaN;
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
       return errorResponse(
         400,
-        'INVALID_AMOUNT',
+        'VALIDATION_ERROR',
         'O valor da solicitação deve ser maior que zero.',
       );
     }
 
-    if (!body.description || body.description.trim().length < 10) {
-      return errorResponse(
-        400,
-        'INVALID_DESCRIPTION',
-        'A justificativa deve conter ao menos 10 caracteres.',
-      );
+    if (!body.description || body.description.trim().length < 1) {
+      return errorResponse(400, 'VALIDATION_ERROR', 'Informe a descrição.');
     }
 
     const now = new Date().toISOString();
-    const sessionUserId = getSessionUserId() ?? 'usr-1';
-    const created: Request = {
-      id: `req-${Date.now().toString().slice(-4)}`,
-      userId: sessionUserId,
-      category: body.category,
-      description: body.description.trim(),
-      amount: Math.round(body.amount),
+    const nextId =
+      operationalDb.requests.reduce((max, item) => Math.max(max, item.id), 100) + 1;
+    const formattedAmount = moneyOut(numericAmount);
+    const activeBudget = operationalDb.budgets[0] ?? null;
+    const activeLimit = operationalDb.approvalLimits[0] ?? null;
+
+    const created: OperationalRequest = {
+      id: nextId,
       status: 'AWAITING_VOTING',
-      attachmentName: body.attachmentName || 'anexo_justificativa.pdf',
-      attachmentUrl: '#',
+      description: body.description.trim(),
+      amount: formattedAmount,
       createdAt: now,
       updatedAt: now,
+      requester: { id: actor.id, name: actor.user.name },
+      category: { id: category.id, name: category.name },
+      budget: activeBudget ? { id: activeBudget.id, year: activeBudget.year } : null,
+      approvalLimit: activeLimit
+        ? {
+            id: activeLimit.id,
+            amount: activeLimit.amount,
+            periodMonths: activeLimit.periodMonths,
+          }
+        : null,
+      amounts: {
+        requested: formattedAmount,
+        provisioned: '0.00',
+        paid: null,
+      },
+      payment: null,
+      complementRequests: [],
+      timeline: [
+        {
+          at: now,
+          action: 'REQUEST_CREATED',
+          actor: { id: actor.id, name: actor.user.name },
+          fromStatus: null,
+          toStatus: 'AWAITING_VOTING',
+          justification: null,
+        },
+      ],
     };
 
-    mockDb.requests = [created, ...mockDb.requests];
+    operationalDb.requests = [created, ...operationalDb.requests];
     return HttpResponse.json(created, { status: 201 });
   }),
 
   http.patch('/api/requests/:id', async ({ params, request }) => {
-    await delay(450);
-    const id = String(params.id);
-    const idx = mockDb.requests.findIndex((r) => r.id === id);
+    await delay(300);
+    const actor = sessionActor();
+    if (!actor) return errorResponse(401, 'UNAUTHORIZED', 'Autenticação necessária');
 
+    const id = Number(params.id);
+    const idx = operationalDb.requests.findIndex((r) => r.id === id);
     if (idx === -1) {
-      return errorResponse(404, 'REQUEST_NOT_FOUND', 'Solicitação não encontrada.');
+      return errorResponse(404, 'NOT_FOUND', 'Solicitação não encontrada.');
     }
 
-    const existing = mockDb.requests[idx];
+    const existing = operationalDb.requests[idx];
+    if (existing.requester.id !== actor.id) {
+      return errorResponse(403, 'FORBIDDEN', 'Apenas o solicitante pode editar esta solicitação.');
+    }
     if (!canModifyRequest(existing.status)) {
       return errorResponse(
         409,
-        'REQUEST_IMMUTABLE',
+        'CONFLICT',
         'Solicitação bloqueada para edição no status atual.',
       );
     }
 
     const body = (await request.json()) as Partial<UpdateRequestPayload>;
-    if (!body.description || body.description.trim().length < 10) {
-      return errorResponse(
-        400,
-        'INVALID_DESCRIPTION',
-        'A justificativa deve conter ao menos 10 caracteres.',
-      );
+    if (body.description !== undefined && body.description.trim().length < 1) {
+      return errorResponse(400, 'VALIDATION_ERROR', 'Informe a descrição.');
     }
 
     const locked = isAmountLocked(existing.status);
     let nextAmount = existing.amount;
-
     if (!locked && body.amount !== undefined) {
-      if (
-        typeof body.amount !== 'number' ||
-        !Number.isFinite(body.amount) ||
-        body.amount <= 0
-      ) {
+      const numericAmount = typeof body.amount === 'string' ? Number(body.amount) : NaN;
+      if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
         return errorResponse(
           400,
-          'INVALID_AMOUNT',
+          'VALIDATION_ERROR',
           'O valor da solicitação deve ser maior que zero.',
         );
       }
-      nextAmount = Math.round(body.amount);
+      nextAmount = moneyOut(numericAmount);
     }
 
-    const updated: Request = {
+    const updated: OperationalRequest = {
       ...existing,
-      description: body.description.trim(),
+      description: body.description ? body.description.trim() : existing.description,
       amount: nextAmount,
-      ...(body.attachmentName ? { attachmentName: body.attachmentName } : {}),
+      amounts: {
+        ...existing.amounts,
+        requested: nextAmount,
+      },
       updatedAt: new Date().toISOString(),
     };
 
-    mockDb.requests[idx] = updated;
+    operationalDb.requests[idx] = updated;
     return HttpResponse.json(updated, { status: 200 });
   }),
 
-  http.patch('/api/requests/:id/cancel', ({ params }) => {
-    const id = String(params.id);
-    return /^\d+$/.test(id)
-      ? handleOperationalCancel(Number(id))
-      : handleCancelRequest(id);
-  }),
-
   http.post('/api/requests/:id/cancel', async ({ params, request }) => {
-    const id = String(params.id);
-    if (!/^\d+$/.test(id)) return handleCancelRequest(id);
-    const body = (await request.json()) as Partial<CancelOperationalRequestPayload>;
-    return handleOperationalCancel(Number(id), body);
+    const id = Number(params.id);
+    const body = (await request.json().catch(() => ({}))) as Partial<CancelOperationalRequestPayload>;
+    return handleOperationalCancel(id, body);
   }),
 
   // ============================================================
@@ -701,7 +625,7 @@ export const handlers = [
     const target = operationalDb.requests.find((item) => item.id === voting.requestId)!;
     const privileged =
       target.requester.id !== actor.id &&
-      (voting.memberIds.includes(actor.id) || actor.user.profiles.some((profile) => profile.role === 'HEAD'));
+      (voting.memberIds.includes(actor.id) || actor.user.roleAssignments.some((profile) => profile.role === 'HEAD'));
     const detail: VotingDetail = {
       id: summary.id,
       request: summary.request,
@@ -747,11 +671,10 @@ export const handlers = [
       return errorResponse(422, 'BUSINESS_RULE', 'O prazo da votação deve ser no futuro');
     }
     const memberIds = mockDb.users
-      .filter((user) => user.active && user.id !== stringUserId(target.requester.id))
-      .filter((user) => user.profiles.some((profile) => profile.role === 'COUNCIL_MEMBER'))
-      .filter((user) => !user.profiles.some((profile) => profile.role === 'HEAD'))
-      .map((user) => numericUserId(user.id))
-      .filter((id): id is number => id !== null);
+      .filter((user) => user.active && user.id !== target.requester.id)
+      .filter((user) => user.roleAssignments.some((profile) => profile.role === 'COUNCIL_MEMBER'))
+      .filter((user) => !user.roleAssignments.some((profile) => profile.role === 'HEAD'))
+      .map((user) => user.id);
     if (memberIds.length === 0) {
       return errorResponse(422, 'BUSINESS_RULE', 'Não há conselheiros aptos a votar esta solicitação');
     }
@@ -830,7 +753,7 @@ export const handlers = [
     const voting = operationalDb.votings.find((item) => item.id === Number(params.id));
     if (!voting) return errorResponse(404, 'NOT_FOUND', 'Votação não encontrada');
     const target = operationalDb.requests.find((item) => item.id === voting.requestId);
-    const allowed = target?.requester.id !== actor.id && (voting.memberIds.includes(actor.id) || actor.user.profiles.some((profile) => profile.role === 'HEAD'));
+    const allowed = target?.requester.id !== actor.id && (voting.memberIds.includes(actor.id) || actor.user.roleAssignments.some((profile) => profile.role === 'HEAD'));
     if (!allowed) return errorResponse(403, 'FORBIDDEN', 'Comentários restritos aos conselheiros convocados e ao chefe');
     return HttpResponse.json(voting.comments);
   }),
@@ -843,7 +766,7 @@ export const handlers = [
     const voting = operationalDb.votings.find((item) => item.id === Number(params.id));
     if (!voting) return errorResponse(404, 'NOT_FOUND', 'Votação não encontrada');
     const target = operationalDb.requests.find((item) => item.id === voting.requestId);
-    const allowed = target?.requester.id !== actor.id && (voting.memberIds.includes(actor.id) || actor.user.profiles.some((profile) => profile.role === 'HEAD'));
+    const allowed = target?.requester.id !== actor.id && (voting.memberIds.includes(actor.id) || actor.user.roleAssignments.some((profile) => profile.role === 'HEAD'));
     if (!allowed) return errorResponse(403, 'FORBIDDEN', 'Comentários restritos aos conselheiros convocados e ao chefe');
     if (voting.status !== 'OPEN' && voting.status !== 'AWAITING_TIE_BREAK') return errorResponse(409, 'CONFLICT', 'A votação está encerrada para comentários');
     const body = (await request.json()) as Partial<CommentPayload>;
@@ -1051,69 +974,85 @@ export const handlers = [
   // Gestão de Usuários e Vigências (/api/users)
   // ============================================================
   http.get('/api/users', async () => {
-    await delay(300);
-    const data = [...mockDb.users];
-    return HttpResponse.json(
-      {
-        data,
-        total: data.length,
-        page: 1,
-        pageSize: 20,
-        totalPages: 1,
-      },
-      { status: 200 },
-    );
+    await delay(250);
+    return HttpResponse.json([...mockDb.users], { status: 200 });
   }),
 
-  http.post('/api/users/invite', async ({ request }) => {
-    await delay(400);
+  http.get('/api/users/:id', async ({ params }) => {
+    await delay(200);
+    const id = Number(params.id);
+    const user = mockDb.users.find((u) => u.id === id);
+    if (!user) {
+      return errorResponse(404, 'NOT_FOUND', 'Usuário não encontrado.');
+    }
+    return HttpResponse.json(user, { status: 200 });
+  }),
+
+  http.post('/api/users', async ({ request }) => {
+    await delay(350);
     const body = (await request.json()) as InviteUserPayload;
 
-    if (body.role === 'HEAD') {
+    if (body.roles.includes('HEAD')) {
       const existingHead = findActiveHeadUser();
       if (existingHead) {
         return errorResponse(
           409,
-          'ACTIVE_HEAD_EXISTS',
+          'CONFLICT',
           `Já existe um Chefe de Departamento com mandato vigente (${existingHead.name}).`,
         );
       }
     }
 
     const now = new Date().toISOString();
+    const nextUserId = nextId(mockDb.users);
+    let nextAssignmentId = nextId(
+      mockDb.users.flatMap((u) => u.roleAssignments),
+    );
+    const roleAssignments: RoleAssignment[] = body.roles.map((role) => ({
+      id: nextAssignmentId++,
+      role,
+      startsAt: now,
+      endsAt: null,
+      current: true,
+    }));
+
     const newUser: User = {
-      id: `usr-${Date.now().toString().slice(-4)}`,
+      id: nextUserId,
       name: body.name,
       email: body.email.trim().toLowerCase(),
       active: true,
-      profiles: [
-        {
-          id: `p-${Date.now()}`,
-          role: body.role,
-          startsAt: body.startsAt,
-          endsAt: body.endsAt || null,
-        },
-      ],
+      invitePending: true,
+      roles: [...body.roles],
+      roleAssignments,
       createdAt: now,
-      updatedAt: now,
     };
     mockDb.users = [newUser, ...mockDb.users];
     return HttpResponse.json(newUser, { status: 201 });
   }),
 
-  http.post('/api/users/:userId/profiles', async ({ params, request }) => {
-    await delay(400);
-    const userId = String(params.userId);
+  http.post('/api/users/:id/invite', async ({ params }) => {
+    await delay(250);
+    const id = Number(params.id);
+    const user = mockDb.users.find((u) => u.id === id);
+    if (!user) {
+      return errorResponse(404, 'NOT_FOUND', 'Usuário não encontrado.');
+    }
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post('/api/users/:id/roles', async ({ params, request }) => {
+    await delay(300);
+    const userId = Number(params.id);
     const userIdx = mockDb.users.findIndex((u) => u.id === userId);
     if (userIdx === -1) {
-      return errorResponse(404, 'USER_NOT_FOUND', 'Usuário não encontrado.');
+      return errorResponse(404, 'NOT_FOUND', 'Usuário não encontrado.');
     }
 
     const user = mockDb.users[userIdx];
     if (!user.active) {
       return errorResponse(
         409,
-        'USER_INACTIVE',
+        'CONFLICT',
         'Não é possível atribuir perfis a um usuário desativado.',
       );
     }
@@ -1124,78 +1063,75 @@ export const handlers = [
       if (existingHead) {
         return errorResponse(
           409,
-          'ACTIVE_HEAD_EXISTS',
+          'CONFLICT',
           `Já existe um Chefe de Departamento com mandato vigente (${existingHead.name}).`,
         );
       }
     }
 
     const now = new Date().toISOString();
-    const newProfile: ProfileTenure = {
-      id: `p-${Date.now()}`,
+    const newAssignment: RoleAssignment = {
+      id: nextId(mockDb.users.flatMap((u) => u.roleAssignments)),
       role: body.role,
-      startsAt: body.startsAt,
-      endsAt: body.endsAt || null,
+      startsAt: body.startsAt ?? now,
+      endsAt: body.endsAt ?? null,
+      current: true,
     };
 
     const updatedUser: User = {
       ...user,
-      profiles: [...user.profiles, newProfile],
-      updatedAt: now,
+      roles: [...new Set([...user.roles, body.role])],
+      roleAssignments: [...user.roleAssignments, newAssignment],
     };
     mockDb.users[userIdx] = updatedUser;
     return HttpResponse.json(updatedUser, { status: 201 });
   }),
 
-  http.patch('/api/users/:userId/status', async ({ params, request }) => {
-    await delay(350);
-    const userId = String(params.userId);
+  http.patch('/api/users/:id', async ({ params, request }) => {
+    await delay(300);
+    const userId = Number(params.id);
     const userIdx = mockDb.users.findIndex((u) => u.id === userId);
     if (userIdx === -1) {
-      return errorResponse(404, 'USER_NOT_FOUND', 'Usuário não encontrado.');
+      return errorResponse(404, 'NOT_FOUND', 'Usuário não encontrado.');
     }
 
-    const body = (await request.json()) as { active?: boolean };
-    if (typeof body.active !== 'boolean') {
-      return errorResponse(400, 'INVALID_STATUS', 'Informe o campo active.');
-    }
-
-    const now = new Date().toISOString();
+    const body = (await request.json()) as { name?: string; active?: boolean };
+    const existing = mockDb.users[userIdx];
     const updatedUser: User = {
-      ...mockDb.users[userIdx],
-      active: body.active,
-      updatedAt: now,
+      ...existing,
+      ...(body.name !== undefined ? { name: body.name } : {}),
+      ...(body.active !== undefined ? { active: body.active } : {}),
     };
     mockDb.users[userIdx] = updatedUser;
     return HttpResponse.json(updatedUser, { status: 200 });
   }),
 
-  http.patch(
-    '/api/users/:userId/profiles/:profileId/end',
+  http.post(
+    '/api/users/:id/roles/:assignmentId/end',
     async ({ params }) => {
-      await delay(400);
-      const userId = String(params.userId);
-      const profileId = String(params.profileId);
+      await delay(300);
+      const userId = Number(params.id);
+      const assignmentId = Number(params.assignmentId);
 
       const userIdx = mockDb.users.findIndex((u) => u.id === userId);
       if (userIdx === -1) {
-        return errorResponse(404, 'USER_NOT_FOUND', 'Usuário não encontrado.');
+        return errorResponse(404, 'NOT_FOUND', 'Usuário não encontrado.');
       }
 
       const user = mockDb.users[userIdx];
-      const profIdx = user.profiles.findIndex((p) => p.id === profileId);
+      const profIdx = user.roleAssignments.findIndex((p) => p.id === assignmentId);
       if (profIdx === -1) {
-        return errorResponse(404, 'PROFILE_NOT_FOUND', 'Perfil não encontrado.');
+        return errorResponse(404, 'NOT_FOUND', 'Atribuição de perfil não encontrada.');
       }
 
       const now = new Date().toISOString();
-      const updatedProfiles = user.profiles.map((p) =>
-        p.id === profileId ? { ...p, endsAt: now } : p,
+      const updatedAssignments = user.roleAssignments.map((p) =>
+        p.id === assignmentId ? { ...p, endsAt: now, current: false } : p,
       );
       const updatedUser: User = {
         ...user,
-        profiles: updatedProfiles,
-        updatedAt: now,
+        roles: updatedAssignments.filter((a) => a.current).map((a) => a.role),
+        roleAssignments: updatedAssignments,
       };
       mockDb.users[userIdx] = updatedUser;
       return HttpResponse.json(updatedUser, { status: 200 });

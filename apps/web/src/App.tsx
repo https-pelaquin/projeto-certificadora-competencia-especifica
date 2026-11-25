@@ -16,6 +16,7 @@ import {
   RequestDetailPage,
   ReportsPage,
   RequestsPage,
+  SetPasswordPage,
   UsersPage,
   VotingDetailPage,
   VotingsPage,
@@ -55,27 +56,28 @@ export default function App() {
           <BrowserRouter>
             <ApiInterceptorBridge />
             <Routes>
-              {/* Rota pública de Autenticação Institucional */}
+              {/* Rotas públicas de Autenticação Institucional */}
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/definir-senha" element={<SetPasswordPage />} />
 
               {/* Rotas Protegidas sob o ShellLayout */}
               <Route element={<ProtectedRoute />}>
                 <Route element={<ShellLayout />}>
-                  {/* Visão Geral do Docente (exclusivo para perfil PROFESSOR vigente) */}
+                  {/* Visão Geral do Docente (permissão requests:create) */}
                   <Route
                     path="/docente"
                     element={
-                      <ProtectedRoute allowedRoles={['PROFESSOR']}>
+                      <ProtectedRoute allowedPermissions={['requests:create']}>
                         <OverviewPage />
                       </ProtectedRoute>
                     }
                   />
 
-                  {/* Solicitações Financeiras do Docente (exclusivo para perfil PROFESSOR vigente) */}
+                  {/* Solicitações Financeiras (permissão requests:create) */}
                   <Route
                     path="/solicitacoes"
                     element={
-                      <ProtectedRoute allowedRoles={['PROFESSOR']}>
+                      <ProtectedRoute allowedPermissions={['requests:create']}>
                         <RequestsPage />
                       </ProtectedRoute>
                     }

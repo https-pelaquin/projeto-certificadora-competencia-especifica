@@ -1,39 +1,41 @@
-import { apiFetch } from '@/lib/http';
+import { apiClient } from '@/lib/api-client';
+import { cancelOperationalRequest } from '@/features/operational-requests/api/operational-requests-api';
 import type {
+  CancelRequestPayload,
   CreateRequestPayload,
-  Request,
+  OperationalRequest,
   RequestsListResponse,
   UpdateRequestPayload,
 } from '@/types';
 
-/** Obtém a lista de solicitações e o resumo de limite acumulado do docente */
+/** Obtém a lista paginada de solicitações do usuário (`GET /api/requests`) */
 export function fetchRequests(): Promise<RequestsListResponse> {
-  return apiFetch<RequestsListResponse>('/api/requests');
+  return apiClient.get<RequestsListResponse>('/api/requests?page=1&pageSize=100');
 }
 
-/** Cria uma nova solicitação financeira */
-export function createRequest(payload: CreateRequestPayload): Promise<Request> {
-  return apiFetch<Request>('/api/requests', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+/** Cria uma nova solicitação financeira (`POST /api/requests`) */
+export function createRequest(
+  payload: CreateRequestPayload,
+): Promise<OperationalRequest> {
+  return apiClient.post<OperationalRequest>('/api/requests', payload);
 }
 
 /** Atualiza uma solicitação existente respeitando a imutabilidade de valor pós-aprovação */
 export function updateRequest(
-  id: string,
+  id: number | string,
   payload: UpdateRequestPayload,
-): Promise<Request> {
-  return apiFetch<Request>(`/api/requests/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
+): Promise<OperationalRequest> {
+  return apiClient.patch<OperationalRequest>(
+    `/api/requests/${encodeURIComponent(String(id))}`,
+    payload,
+  );
 }
 
-/** Cancela uma solicitação financeira, liberando saldo reservado */
-export function cancelRequest(id: string): Promise<Request> {
-  return apiFetch<Request>(`/api/requests/${encodeURIComponent(id)}/cancel`, {
-    method: 'PATCH',
-  });
+/** Cancela uma solicitação financeira via `POST /api/requests/:id/cancel` */
+export function cancelRequest(
+  id: number | string,
+  payload: CancelRequestPayload = {},
+): Promise<OperationalRequest> {
+  return cancelOperationalRequest(Number(id), payload);
 }
 

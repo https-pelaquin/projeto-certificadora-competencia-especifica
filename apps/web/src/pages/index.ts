@@ -1,4 +1,5 @@
 export { LoginPage } from './login';
+export { SetPasswordPage } from './set-password';
 export { OverviewPage } from './overview';
 export { RequestsPage } from './requests';
 export { DocentePage } from './docente';

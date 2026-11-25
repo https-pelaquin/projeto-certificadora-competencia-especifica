@@ -59,7 +59,7 @@ import {
 } from '@/schemas';
 import { isTenureActive } from '@/lib/auth-rules';
 import { formatDate } from '@/lib/utils';
-import { ROLE_LABELS, type Role, type ProfileTenure, type User } from '@/types';
+import { ROLE_LABELS, type Role, type RoleAssignment, type User } from '@/types';
 
 type UserStatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
@@ -71,7 +71,7 @@ export function UsersPage() {
   const [statusFilter, setStatusFilter] = useState<UserStatusFilter>('ALL');
   const [endTenureTarget, setEndTenureTarget] = useState<{
     user: User;
-    profile: ProfileTenure;
+    assignment: RoleAssignment;
   } | null>(null);
 
   const { data: usersResponse, isLoading, isError } = useUsers();
@@ -80,20 +80,17 @@ export function UsersPage() {
   const deactivateMutation = useDeactivateUser();
   const endTenureMutation = useEndProfileTenure();
 
-  const users = useMemo(
-    () => usersResponse?.data ?? [],
-    [usersResponse?.data],
-  );
+  const users = useMemo(() => usersResponse ?? [], [usersResponse]);
 
   // Chefe de departamento com mandato vigente ativo (active === true e vigência dentro da janela)
   const currentActiveHead = useMemo(() => {
     for (const u of users) {
       if (!u.active) continue;
-      const activeHeadProfile = u.profiles.find(
+      const activeHeadProfile = u.roleAssignments.find(
         (p) => p.role === 'HEAD' && isTenureActive(p),
       );
       if (activeHeadProfile) {
-        return { user: u, profile: activeHeadProfile };
+        return { user: u, assignment: activeHeadProfile };
       }
     }
     return null;
@@ -117,8 +114,6 @@ export function UsersPage() {
       name: '',
       email: '',
       role: 'PROFESSOR',
-      startsAt: new Date().toISOString().split('T')[0],
-      endsAt: '',
     },
   });
 
@@ -160,11 +155,7 @@ export function UsersPage() {
     await inviteMutation.mutateAsync({
       name: data.name,
       email: data.email,
-      role: data.role,
-      startsAt: new Date(`${data.startsAt}T00:00:00Z`).toISOString(),
-      endsAt: data.endsAt
-        ? new Date(`${data.endsAt}T23:59:59Z`).toISOString()
-        : null,
+      roles: [data.role],
     });
     setInviteOpen(false);
     inviteForm.reset();
@@ -176,9 +167,9 @@ export function UsersPage() {
       userId: assignTargetUser.id,
       role: data.role,
       startsAt: new Date(`${data.startsAt}T00:00:00Z`).toISOString(),
-      endsAt: data.endsAt
-        ? new Date(`${data.endsAt}T23:59:59Z`).toISOString()
-        : null,
+      ...(data.endsAt
+        ? { endsAt: new Date(`${data.endsAt}T23:59:59Z`).toISOString() }
+        : {}),
     });
     setAssignTargetUser(null);
   };
@@ -209,8 +200,6 @@ export function UsersPage() {
               name: '',
               email: '',
               role: 'PROFESSOR',
-              startsAt: new Date().toISOString().split('T')[0],
-              endsAt: '',
             });
             setInviteOpen(true);
           }}
@@ -238,9 +227,9 @@ export function UsersPage() {
               {currentActiveHead ? (
                 <p className="text-xs text-slate-600 mt-0.5">
                   <span className="font-semibold text-[#164E3F]">{currentActiveHead.user.name}</span>{' '}
-                  ({currentActiveHead.user.email}) — Vigência: {formatDate(currentActiveHead.profile.startsAt)}{' '}
-                  {currentActiveHead.profile.endsAt
-                    ? `até ${formatDate(currentActiveHead.profile.endsAt)}`
+                  ({currentActiveHead.user.email}) — Vigência: {formatDate(currentActiveHead.assignment.startsAt)}{' '}
+                  {currentActiveHead.assignment.endsAt
+                    ? `até ${formatDate(currentActiveHead.assignment.endsAt)}`
                     : '• sem termo final'}
                 </p>
               ) : (
@@ -366,7 +355,7 @@ export function UsersPage() {
 
                     <TableCell>
                       <div className="flex flex-wrap gap-1.5">
-                        {user.profiles.map((p) => {
+                        {user.roleAssignments.map((p) => {
                           const vigente = user.active && isTenureActive(p);
                           return (
                             <div
@@ -413,7 +402,7 @@ export function UsersPage() {
                         </Button>
 
                         {user.active &&
-                          user.profiles
+                          user.roleAssignments
                             .filter((p) => isTenureActive(p) && p.role !== 'PROFESSOR')
                             .map((p) => (
                               <Button
@@ -421,7 +410,7 @@ export function UsersPage() {
                                 variant="ghost"
                                 size="sm"
                                 data-testid={`btn-end-tenure-${p.id}`}
-                                onClick={() => setEndTenureTarget({ user, profile: p })}
+                                onClick={() => setEndTenureTarget({ user, assignment: p })}
                                 className="h-8 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-50 gap-1 cursor-pointer"
                                 title={`Encerrar mandato de ${ROLE_LABELS[p.role]}`}
                               >
@@ -487,7 +476,7 @@ export function UsersPage() {
 
             <div className="space-y-1.5">
               <Label htmlFor="inv-email" className="text-xs font-semibold text-slate-700">
-                E-mail Institucional (@utfpr.edu.br) *
+                E-mail *
               </Label>
               <Input
                 id="inv-email"
@@ -554,40 +543,6 @@ export function UsersPage() {
                   </div>
                 </div>
               )}
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="inv-starts-at" className="text-xs font-semibold text-slate-700">
-                  Início da Vigência (startsAt) *
-                </Label>
-                <Input
-                  id="inv-starts-at"
-                  data-testid="input-invite-starts-at"
-                  type="date"
-                  className="bg-slate-50"
-                  {...inviteForm.register('startsAt')}
-                />
-                {inviteForm.formState.errors.startsAt && (
-                  <p className="text-xs text-red-500">{inviteForm.formState.errors.startsAt.message}</p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="inv-ends-at" className="text-xs font-semibold text-slate-700">
-                  Fim da Vigência (endsAt)
-                </Label>
-                <Input
-                  id="inv-ends-at"
-                  data-testid="input-invite-ends-at"
-                  type="date"
-                  className="bg-slate-50"
-                  {...inviteForm.register('endsAt')}
-                />
-                {inviteForm.formState.errors.endsAt && (
-                  <p className="text-xs text-red-500">{inviteForm.formState.errors.endsAt.message}</p>
-                )}
-              </div>
             </div>
 
             <DialogFooter className="pt-2">
@@ -793,7 +748,7 @@ export function UsersPage() {
           }
         }}
         title="Encerrar Mandato Institucional?"
-        description={`Você deseja encerrar a vigência do perfil "${endTenureTarget ? ROLE_LABELS[endTenureTarget.profile.role] : ''}" para ${endTenureTarget?.user.name}? A data de término (endsAt) será registrada com a data de hoje.`}
+        description={`Você deseja encerrar a vigência do perfil "${endTenureTarget ? ROLE_LABELS[endTenureTarget.assignment.role] : ''}" para ${endTenureTarget?.user.name}? A data de término (endsAt) será registrada com a data de hoje.`}
         confirmLabel="Sim, Encerrar Mandato"
         cancelLabel="Cancelar"
         variant="destructive"
@@ -803,7 +758,7 @@ export function UsersPage() {
             endTenureMutation.mutate(
               {
                 userId: endTenureTarget.user.id,
-                profileId: endTenureTarget.profile.id,
+                assignmentId: endTenureTarget.assignment.id,
               },
               {
                 onSuccess: () => setEndTenureTarget(null),

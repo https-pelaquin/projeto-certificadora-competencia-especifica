@@ -3,7 +3,6 @@ import { toast } from '@/lib/toast';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const AUTH_SESSION_QUERY_KEY = ['auth', 'me'] as const;
-const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /** Envelope padrão de erro retornado pelo backend Node.js/Express */
 export interface BackendErrorEnvelope {
@@ -44,21 +43,6 @@ export function registerAuthRedirectHandler(
   handler: AuthRedirectHandler | null,
 ): void {
   authRedirectHandler = handler;
-}
-
-function readCsrfTokenFromCookie(): string | null {
-  if (typeof document === 'undefined' || !document.cookie) {
-    return null;
-  }
-
-  const cookies = document.cookie.split(';');
-  for (const cookie of cookies) {
-    const [rawName, ...rest] = cookie.trim().split('=');
-    if (rawName === 'XSRF-TOKEN' || rawName === 'csrfToken' || rawName === 'csrf_token') {
-      return decodeURIComponent(rest.join('='));
-    }
-  }
-  return null;
 }
 
 async function parseErrorEnvelope(response: Response): Promise<ApiError> {
@@ -133,13 +117,6 @@ export async function apiRequest<T>(
 
   if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
-  }
-
-  if (MUTATING_METHODS.has(method)) {
-    const csrfToken = readCsrfTokenFromCookie();
-    if (csrfToken && !headers.has('X-CSRF-Token')) {
-      headers.set('X-CSRF-Token', csrfToken);
-    }
   }
 
   const response = await fetch(buildUrl(input), {

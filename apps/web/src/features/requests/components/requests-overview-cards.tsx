@@ -9,73 +9,90 @@ import {
 } from '@/components/ui/card';
 import { CardSkeleton } from '@/components/shared';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import type { ExpenseCategory, FinancialSummary, Request } from '@/types';
+import type { FinancialSummary, Request } from '@/types';
 
 interface RequestsOverviewCardsProps {
   summary?: FinancialSummary;
   requests: Request[];
+  total?: number;
   isLoading: boolean;
   isError: boolean;
 }
 
-const CATEGORY_BARS: {
-  label: string;
-  key: ExpenseCategory;
-  color: string;
-}[] = [
-  {
-    label: 'Material de Consumo',
-    key: 'MATERIAL_CONSUMO',
-    color: 'bg-emerald-600',
-  },
-  {
-    label: 'Equipamentos e Softwares',
-    key: 'EQUIPAMENTOS',
-    color: 'bg-teal-600',
-  },
-  {
-    label: 'Diárias e Passagens',
-    key: 'DIARIAS_PASSAGENS',
-    color: 'bg-blue-600',
-  },
-  {
-    label: 'Serviços de Terceiros',
-    key: 'SERVICOS_TERCEIROS',
-    color: 'bg-amber-600',
-  },
+const CATEGORY_COLORS = [
+  'bg-emerald-600',
+  'bg-teal-600',
+  'bg-blue-600',
+  'bg-amber-600',
+  'bg-indigo-600',
 ];
+
+function computeSummaryFromRequests(
+  requests: Request[],
+  total?: number,
+): FinancialSummary {
+  const usedAmount = requests
+    .filter((r) => r.status === 'PAID' || r.status === 'PROVISIONED')
+    .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+
+  return {
+    usedAmount,
+    totalRequests: total ?? requests.length,
+    approvedRequests: requests.filter(
+      (r) => r.status === 'PAID' || r.status === 'PROVISIONED',
+    ).length,
+    pendingRequests: requests.filter((r) =>
+      [
+        'AWAITING_VOTING',
+        'IN_VOTING',
+        'AWAITING_COMPLEMENT',
+        'AWAITING_BALANCE',
+      ].includes(r.status),
+    ).length,
+    rejectedRequests: requests.filter(
+      (r) => r.status === 'REJECTED' || r.status === 'CANCELED',
+    ).length,
+  };
+}
 
 export function RequestsOverviewCards({
   summary,
   requests,
+  total,
   isLoading,
   isError,
 }: RequestsOverviewCardsProps) {
+  const resolvedSummary = useMemo(
+    () => summary ?? computeSummaryFromRequests(requests, total),
+    [summary, requests, total],
+  );
+
   const categoryStats = useMemo(() => {
-    const counts: Record<ExpenseCategory, number> = {
-      MATERIAL_CONSUMO: 0,
-      SERVICOS_TERCEIROS: 0,
-      EQUIPAMENTOS: 0,
-      DIARIAS_PASSAGENS: 0,
-      OUTROS: 0,
-    };
+    const grouped = new Map<number, { id: number; name: string; count: number }>();
     requests.forEach((r) => {
-      if (counts[r.category] !== undefined) {
-        counts[r.category]++;
+      const current = grouped.get(r.category.id);
+      if (current) {
+        current.count += 1;
+      } else {
+        grouped.set(r.category.id, {
+          id: r.category.id,
+          name: r.category.name,
+          count: 1,
+        });
       }
     });
-    return counts;
+    return Array.from(grouped.values()).sort((a, b) => b.count - a.count);
   }, [requests]);
 
   if (isLoading) {
     return <CardSkeleton count={2} />;
   }
 
-  if (isError || !summary) {
+  if (isError) {
     return (
       <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-center gap-2">
         <AlertCircle className="h-4 w-4" />
-        Não foi possível carregar os dados de limite orçamentário.
+        Não foi possível carregar os dados das solicitações.
       </div>
     );
   }
@@ -97,8 +114,9 @@ export function RequestsOverviewCards({
                 Status e Limite Acumulado no Período
               </CardTitle>
               <CardDescription className="text-[11px] text-slate-400">
-                Janela móvel vigente: {formatDate(summary.periodStart)} até{' '}
-                {formatDate(summary.periodEnd)}
+                {resolvedSummary.periodStart && resolvedSummary.periodEnd
+                  ? `Janela móvel vigente: ${formatDate(resolvedSummary.periodStart)} até ${formatDate(resolvedSummary.periodEnd)}`
+                  : 'Resumo consolidado das solicitações registradas'}
               </CardDescription>
             </div>
           </div>
@@ -117,7 +135,9 @@ export function RequestsOverviewCards({
                 data-testid="summary-limit-total"
                 className="text-base sm:text-lg font-bold text-slate-900 mt-0.5"
               >
-                {formatCurrency(summary.accumulatedLimit)}
+                {resolvedSummary.accumulatedLimit != null
+                  ? formatCurrency(resolvedSummary.accumulatedLimit)
+                  : '—'}
               </p>
             </div>
             <div>
@@ -128,7 +148,7 @@ export function RequestsOverviewCards({
                 data-testid="summary-limit-used"
                 className="text-base sm:text-lg font-bold text-amber-700 mt-0.5"
               >
-                {formatCurrency(summary.usedAmount)}
+                {formatCurrency(resolvedSummary.usedAmount)}
               </p>
             </div>
             <div>
@@ -139,7 +159,9 @@ export function RequestsOverviewCards({
                 data-testid="summary-limit-available"
                 className="text-base sm:text-lg font-bold text-[#164E3F] mt-0.5"
               >
-                {formatCurrency(summary.availableAmount)}
+                {resolvedSummary.availableAmount != null
+                  ? formatCurrency(resolvedSummary.availableAmount)
+                  : '—'}
               </p>
             </div>
           </div>
@@ -151,7 +173,7 @@ export function RequestsOverviewCards({
                 Solicitados
               </span>
               <p className="text-xl font-extrabold text-slate-900 mt-0.5">
-                {summary.totalRequests}
+                {resolvedSummary.totalRequests}
               </p>
               <span className="text-[10px] text-emerald-600 font-medium">
                 +100% total
@@ -162,7 +184,7 @@ export function RequestsOverviewCards({
                 Aprovados
               </span>
               <p className="text-xl font-extrabold text-emerald-700 mt-0.5">
-                {summary.approvedRequests}
+                {resolvedSummary.approvedRequests}
               </p>
               <span className="text-[10px] text-emerald-600 font-medium">
                 Liberados
@@ -173,7 +195,7 @@ export function RequestsOverviewCards({
                 Em Análise
               </span>
               <p className="text-xl font-extrabold text-amber-700 mt-0.5">
-                {summary.pendingRequests}
+                {resolvedSummary.pendingRequests}
               </p>
               <span className="text-[10px] text-amber-600 font-medium">
                 Em votação
@@ -184,7 +206,7 @@ export function RequestsOverviewCards({
                 Rejeitados
               </span>
               <p className="text-xl font-extrabold text-red-700 mt-0.5">
-                {summary.rejectedRequests}
+                {resolvedSummary.rejectedRequests}
               </p>
               <span className="text-[10px] text-red-500 font-medium">
                 Indeferidos
@@ -215,31 +237,37 @@ export function RequestsOverviewCards({
           </div>
         </CardHeader>
         <CardContent className="pt-4 space-y-3.5">
-          {CATEGORY_BARS.map((item) => {
-            const count = categoryStats[item.key] || 0;
-            const percent =
-              requests.length > 0
-                ? Math.round((count / requests.length) * 100)
-                : 0;
-            return (
-              <div key={item.key} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-slate-700">
-                    {item.label}
-                  </span>
-                  <span className="text-slate-500 font-semibold">
-                    {count} pedidos ({percent}%)
-                  </span>
+          {categoryStats.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-6">
+              Nenhuma solicitação registrada para exibir a distribuição.
+            </p>
+          ) : (
+            categoryStats.map((item, idx) => {
+              const percent =
+                requests.length > 0
+                  ? Math.round((item.count / requests.length) * 100)
+                  : 0;
+              const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+              return (
+                <div key={item.id} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-slate-700">
+                      {item.name}
+                    </span>
+                    <span className="text-slate-500 font-semibold">
+                      {item.count} pedidos ({percent}%)
+                    </span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${color} rounded-full transition-all duration-500`}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${item.color} rounded-full transition-all duration-500`}
-                    style={{ width: `${percent}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </CardContent>
       </Card>
     </div>
