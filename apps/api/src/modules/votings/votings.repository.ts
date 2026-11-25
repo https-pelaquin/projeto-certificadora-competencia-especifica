@@ -69,6 +69,15 @@ export async function lockExpiredOpen(db: Db, id: number, now: Date) {
     return rows.length > 0;
 }
 
+export async function isConvenedForRequest(db: Db, requestId: number, userId: number) {
+    const found = await db.votingEligibleMember.findFirst({
+        where: { userId, voting: { requestId } },
+        select: { userId: true },
+    });
+    return found !== null;
+}
+
+
 export function findActiveByRequest(db: Db, requestId: number) {
     return db.voting.findFirst({ where: { requestId, status: { in: ACTIVE_STATUSES } } });
 }

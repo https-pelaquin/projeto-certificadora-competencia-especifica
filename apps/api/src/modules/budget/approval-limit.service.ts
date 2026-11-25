@@ -2,12 +2,12 @@ import { Prisma } from "../../../generated/prisma/client";
 import { prisma, type Db } from "../../shared/prisma";
 import { actorUserId, type Actor } from "../../shared/actor";
 import { BusinessRuleError } from "../../shared/errors";
-import { addMonths } from "../../shared/dates";
+import { addMonths, startOfDayBrasilia } from "../../shared/dates";
 import * as audit from "../audit/audit.service";
 import * as requestsService from "../requests/requests.service";
 import * as approvalLimitRepository from "./approval-limit.repository";
 
-export async function createLimit(actor: Actor, data: { amount: Prisma.Decimal; periodMonths: number; validFrom: Date }) {
+export async function createLimit(actor: Actor, data: { amount: Prisma.Decimal; periodMonths: number; validFrom: Date }, now = new Date()) {
     if (data.amount.lessThanOrEqualTo(0)) {
         throw new BusinessRuleError("O valor do limite deve ser maior que zero");
     }
@@ -22,6 +22,11 @@ export async function createLimit(actor: Actor, data: { amount: Prisma.Decimal; 
         // senão uma data dentro do período de um limite antigo reescreveria o passado.
         const latest = await approvalLimitRepository.findLatest(tx);
 
+        // Só vale quando há limite anterior: o primeiro não reescreve a vigência de ninguém.
+        // Compara com o início do dia (Brasília) porque o front envia a data de hoje à meia-noite.
+        if (latest && data.validFrom < startOfDayBrasilia(now)) {
+            throw new BusinessRuleError("O novo limite não pode começar no passado");
+        }
         if (latest && data.validFrom <= latest.validFrom) {
             throw new BusinessRuleError("O novo limite deve começar depois do início do último limite cadastrado");
         }

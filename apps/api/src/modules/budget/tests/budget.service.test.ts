@@ -57,3 +57,28 @@ it("confere o saldo só depois de outra operação em andamento no orçamento te
     // Com 400 disponíveis, 500 não cabem: o ajuste não passou por cima de um saldo velho.
     expect(await ledgerOf(budget.id)).toEqual(["ADJUSTMENT_OUT 600.00"]);
 });
+
+it("audita o ajuste com o saldo de antes e o de depois", async () => {
+    const budget = await createBudget(system, { year: 2026, initialAmount: D("1000.00") });
+
+    await adjustBudget(system, budget.id, { amount: D("300.00"), type: "ADJUSTMENT_OUT", justification });
+
+    const log = await prisma.auditLog.findFirstOrThrow({ where: { action: "BUDGET_ADJUSTED", entityId: String(budget.id) } });
+    expect(log.before).toMatchObject({ total: "1000", available: "1000" });
+    expect(log.after).toMatchObject({
+        entry: { type: "ADJUSTMENT_OUT", amount: "300" },
+        balance: { total: "700", available: "700" },
+    });
+});
+
+it("o 'antes' do segundo ajuste é o 'depois' do primeiro", async () => {
+    const budget = await createBudget(system, { year: 2026, initialAmount: D("1000.00") });
+
+    await adjustBudget(system, budget.id, { amount: D("500.00"), type: "ADJUSTMENT_IN", justification });
+    await adjustBudget(system, budget.id, { amount: D("200.00"), type: "ADJUSTMENT_OUT", justification });
+
+    const logs = await prisma.auditLog.findMany({ where: { action: "BUDGET_ADJUSTED", entityId: String(budget.id) }, orderBy: { id: "asc" } });
+    expect(logs[0].after).toMatchObject({ balance: { total: "1500" } });
+    expect(logs[1].before).toMatchObject({ total: "1500" });
+    expect(logs[1].after).toMatchObject({ balance: { total: "1300" } });
+});

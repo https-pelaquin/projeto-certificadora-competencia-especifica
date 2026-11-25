@@ -8,12 +8,13 @@ import * as categoriesService from "../categories/categories.service";
 import { evaluateRequest } from "./request-evaluation";
 import { notifyProvisioned } from "./request-notifications";
 import * as requestsRepository from "./requests.repository";
+import { dateBrasilia } from "../../shared/dates";
 
 type UserActor = Actor & { type: "USER" };
 
 // A solicitação pertence ao orçamento do ano em que foi criada.
 async function budgetIdOfYear(db: Db, now: Date) {
-    const year = now.getUTCFullYear();
+    const year = dateBrasilia(now);
     const budget = await budgetService.findBudgetByYear(db, year);
     if (!budget) {
         throw new NotFoundError(`Não há orçamento cadastrado para ${year}`);

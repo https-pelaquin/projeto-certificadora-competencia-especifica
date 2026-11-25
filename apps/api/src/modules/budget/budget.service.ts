@@ -1,5 +1,5 @@
 import { LedgerEntryType, Prisma } from "../../../generated/prisma/client";
-import { prisma, type Db } from "../../shared/prisma";
+import { prisma, SNAPSHOT, type Db } from "../../shared/prisma";
 import { actorUserId, type Actor } from "../../shared/actor";
 import { BusinessRuleError, ConflictError, NotFoundError } from "../../shared/errors";
 import * as audit from "../audit/audit.service";
@@ -33,24 +33,26 @@ export async function adjustBudget(actor: Actor, budgetId: number, data: {
 
     return prisma.$transaction(async (tx) => {
         await lockBudget(tx, budgetId);
+        const balance = await getBalance(tx, budgetId);
 
         if (data.type === "ADJUSTMENT_OUT") {
-            const balance = await getBalance(tx, budgetId);
             if (balance.available.lessThan(data.amount)) {
                 throw new BusinessRuleError("O saldo disponível não pode ficar negativo");
             }
         }
 
         const entry = await budgetRepository.createLedgerEntry(tx, { budgetId, ...data, createdById: actorUserId(actor) });
+        const after = await getBalance(tx, budgetId);
         await audit.record(tx, actor, {
             action: "BUDGET_ADJUSTED",
             entityType: "Budget",
             entityId: budgetId,
-            after: entry,
+            before: balance,
+            after: { entry, balance: after},
             justification: data.justification,
         });
 
-        return getBalance(tx, budgetId);
+        return after;
     });
 }
 
@@ -136,25 +138,27 @@ export async function getBudgetDetail(id: number) {
 
 // Histórico do ledger, do mais recente ao mais antigo.
 export async function listLedger(budgetId: number, page: number, pageSize: number) {
-    if (!(await budgetRepository.findById(prisma, budgetId))) {
-        throw new NotFoundError("Orçamento não encontrado");
-    }
-    const [items, total] = await Promise.all([
-        budgetRepository.listLedger(prisma, budgetId, { skip: (page - 1) * pageSize, take: pageSize }),
-        budgetRepository.countLedger(prisma, budgetId),
-    ]);
-    return { items, page, pageSize, total };
+    // Página e total na mesma foto do banco: um lançamento novo no meio não desencontra os dois.
+    return prisma.$transaction(async (tx) => {
+        if (!(await budgetRepository.findById(tx, budgetId))) {
+            throw new NotFoundError("Orçamento não encontrado");
+        }
+        const items = await budgetRepository.listLedger(tx, budgetId, { skip: (page - 1) * pageSize, take: pageSize });
+        const total = await budgetRepository.countLedger(tx, budgetId);
+        return { items, page, pageSize, total };
+    }, SNAPSHOT);
 }
 
 export async function getAnnualSummary(year: number) {
-    const budget = await budgetRepository.findByYear(prisma, year);
-    if (!budget) {
-        throw new NotFoundError(`Não há orçamento cadastrado para ${year}`);
-    }
+    // Saldo e lista de solicitações na mesma foto do banco: o relatório oficial não pode misturar dois momentos.
+    return prisma.$transaction(async (tx) => {
+        const budget = await budgetRepository.findByYear(tx, year);
+        if (!budget) {
+            throw new NotFoundError(`Não há orçamento cadastrado para ${year}`);
+        }
 
-    const [balance, requests] = await Promise.all([
-        getBalance(prisma, budget.id),
-        prisma.request.findMany({
+        const balance = await getBalance(tx, budget.id);
+        const requests = await tx.request.findMany({
             where: { budgetId: budget.id },
             orderBy: { createdAt: "asc" },
             select: {
@@ -167,8 +171,8 @@ export async function getAnnualSummary(year: number) {
                 category: { select: { name: true } },
                 payment: { select: { paidAmount: true, paidAt: true } },
             },
-        }),
-    ]);
+        });
 
-    return { year, initialAmount: budget.initialAmount, balance, requests };
+        return { year, initialAmount: budget.initialAmount, balance, requests };
+    }, SNAPSHOT);
 }

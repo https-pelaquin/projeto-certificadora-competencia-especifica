@@ -7,7 +7,7 @@ import {
     authUser, balanceOf, D, holdBudgetWithPendingOutflow, holdRequestWithStatus, insertRequest, ledgerOf, money, setupFinance, stillPending, system, userActor,
 } from "../../../test/finance";
 import { adjustBudget } from "../../budget/budget.service";
-import { openVoting } from "../../votings/votings.service";
+import { closeExpiredVotings, openVoting } from "../../votings/votings.service";
 import { cancelRequest } from "../request-cancellation.service";
 import { createRequest } from "../request-creation.service";
 import { provisionRequest } from "../requests.service";
@@ -243,6 +243,25 @@ describe("cancelar", () => {
         expect(request.status).toBe("AWAITING_VOTING");
 
         const voting = await openVoting(userActor(s.head), request.id, new Date(Date.now() + 60 * 60_000));
+        expect(await statusOf(request.id)).toBe("IN_VOTING");
+
+        await cancelRequest(userActor(s.requester), authUser(s.requester, ["PROFESSOR"]), request.id);
+
+        expect(await statusOf(request.id)).toBe("CANCELED");
+        expect((await prisma.voting.findUniqueOrThrow({ where: { id: voting!.id } })).status).toBe("CANCELED");
+        expect(await ledgerOf(s.budget.id)).toEqual([]);
+    });
+
+    it("cancela também a votação que aguarda desempate", async () => {
+        const s = await setupFinance({ limit: "500.00" });
+        await createUser({ roles: ["COUNCIL_MEMBER"] });
+        await createUser({ roles: ["COUNCIL_MEMBER"] });
+        const request = await provisioned(s, "1000.00");
+        const voting = await openVoting(userActor(s.head), request.id, new Date(Date.now() + 60 * 60_000));
+
+        // Ninguém votou: 0×0 é empate, e a votação fica esperando o chefe decidir.
+        await closeExpiredVotings(new Date(Date.now() + 2 * 60 * 60_000));
+        expect((await prisma.voting.findUniqueOrThrow({ where: { id: voting!.id } })).status).toBe("AWAITING_TIE_BREAK");
         expect(await statusOf(request.id)).toBe("IN_VOTING");
 
         await cancelRequest(userActor(s.requester), authUser(s.requester, ["PROFESSOR"]), request.id);

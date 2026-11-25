@@ -122,6 +122,9 @@ describe("encerramento", () => {
         expect(await prisma.ledgerEntry.count({ where: { requestId: s.req.id, type: "PROVISION" } })).toBe(1);
         // Solicitante + 3 convocados.
         expect(await prisma.emailOutbox.count({ where: { template: "VOTING_CLOSED" } })).toBe(4);
+        // O solicitante também recebe o aviso de provisionamento, uma única vez.
+        const provisioned = await prisma.emailOutbox.findMany({ where: { template: "REQUEST_PROVISIONED" } });
+        expect(provisioned.map((e) => e.toEmail)).toEqual([s.requester.email]);
     });
 
     it("aprovada sem saldo fica aguardando saldo, sem lançamento", async () => {
@@ -132,6 +135,8 @@ describe("encerramento", () => {
 
         expect((await prisma.request.findUniqueOrThrow({ where: { id: s.req.id } })).status).toBe("AWAITING_BALANCE");
         expect(await prisma.ledgerEntry.count()).toBe(0);
+        // Sem provisionar não há aviso de provisionamento (só o de votação encerrada).
+        expect(await prisma.emailOutbox.count({ where: { template: "REQUEST_PROVISIONED" } })).toBe(0);
     });
 
     it("rejeitada muda a solicitação para REJECTED", async () => {
@@ -142,6 +147,7 @@ describe("encerramento", () => {
         await closeExpiredVotings(afterDeadline());
 
         expect((await prisma.request.findUniqueOrThrow({ where: { id: s.req.id } })).status).toBe("REJECTED");
+        expect(await prisma.emailOutbox.count({ where: { template: "REQUEST_PROVISIONED" } })).toBe(0);
     });
 });
 
@@ -163,6 +169,8 @@ describe("desempate", () => {
         expect(res.status).toBe(200);
         expect(res.body).toMatchObject({ status: "CLOSED", result: "APPROVED" });
         expect((await prisma.request.findUniqueOrThrow({ where: { id: s.req.id } })).status).toBe("PROVISIONED");
+        // Aprovada no desempate também avisa o solicitante.
+        expect(await prisma.emailOutbox.count({ where: { template: "REQUEST_PROVISIONED" } })).toBe(1);
 
         expect((await s.headAgent.post(`/api/votings/${votingId}/tie-break`).send({ choice: "REJECT" })).status).toBe(409);
         expect(await prisma.tieBreak.count()).toBe(1);

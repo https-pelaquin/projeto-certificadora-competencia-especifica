@@ -34,6 +34,8 @@ it("recusa limite que começa na mesma data do último cadastrado", async () => 
 });
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
+// "Hoje" fixo dos testes de vigência: todos os limites abaixo começam nesse dia ou depois.
+const NOW = day("2026-01-01");
 
 async function limitsInOrder() {
     return prisma.approvalLimit.findMany({ orderBy: { validFrom: "asc" } });
@@ -41,7 +43,7 @@ async function limitsInOrder() {
 
 it("encerra o limite anterior na data do novo, e o novo nasce sem fim", async () => {
     await createLimit(system, { amount: D("1000.00"), periodMonths: 6, validFrom: day("2026-01-01") });
-    await createLimit(system, { amount: D("3000.00"), periodMonths: 6, validFrom: day("2026-06-01") });
+    await createLimit(system, { amount: D("3000.00"), periodMonths: 6, validFrom: day("2026-06-01") }, NOW);
 
     const [first, second] = await limitsInOrder();
     expect(first.validUntil).toEqual(day("2026-06-01"));
@@ -50,9 +52,9 @@ it("encerra o limite anterior na data do novo, e o novo nasce sem fim", async ()
 
 it("recusa início anterior ao do limite mais recente, mesmo dentro do período de um limite antigo", async () => {
     await createLimit(system, { amount: D("1000.00"), periodMonths: 6, validFrom: day("2026-01-01") });
-    await createLimit(system, { amount: D("3000.00"), periodMonths: 6, validFrom: day("2026-06-01") });
+    await createLimit(system, { amount: D("3000.00"), periodMonths: 6, validFrom: day("2026-06-01") }, NOW);
 
-    await expect(createLimit(system, { amount: D("9999.00"), periodMonths: 6, validFrom: day("2026-03-01") }))
+    await expect(createLimit(system, { amount: D("9999.00"), periodMonths: 6, validFrom: day("2026-03-01") }, NOW))
         .rejects.toThrow(BusinessRuleError);
 
     // nada foi reescrito: o primeiro continua terminando em 1º de junho e só existe um limite sem fim
@@ -108,8 +110,8 @@ it("cadastros simultâneos nunca deixam dois limites sem fim", async () => {
     await createLimit(system, { amount: D("1000.00"), periodMonths: 6, validFrom: day("2026-01-01") });
 
     const results = await Promise.allSettled([
-        createLimit(system, { amount: D("2000.00"), periodMonths: 6, validFrom: day("2026-02-01") }),
-        createLimit(system, { amount: D("3000.00"), periodMonths: 6, validFrom: day("2026-03-01") }),
+        createLimit(system, { amount: D("2000.00"), periodMonths: 6, validFrom: day("2026-02-01") }, NOW),
+        createLimit(system, { amount: D("3000.00"), periodMonths: 6, validFrom: day("2026-03-01") }, NOW),
     ]);
 
     expect(results.filter((r) => r.status === "fulfilled").length).toBeGreaterThanOrEqual(1);
@@ -117,4 +119,34 @@ it("cadastros simultâneos nunca deixam dois limites sem fim", async () => {
         if (r.status === "rejected") expect(r.reason).toBeInstanceOf(BusinessRuleError);
     }
     expect((await limitsInOrder()).filter((l) => l.validUntil === null)).toHaveLength(1);
+});
+
+it("recusa limite que começa no passado quando já existe um anterior, e não reescreve nada", async () => {
+    await createLimit(system, { amount: D("1000.00"), periodMonths: 6, validFrom: day("2026-01-01") });
+    const now = day("2026-11-25");
+
+    await expect(createLimit(system, { amount: D("2000.00"), periodMonths: 6, validFrom: day("2026-11-24") }, now))
+        .rejects.toThrow("não pode começar no passado");
+
+    const all = await limitsInOrder();
+    expect(all).toHaveLength(1);
+    expect(all[0].validUntil).toBeNull();
+});
+
+it("aceita começar hoje à meia-noite de Brasília, mesmo já tendo passado", async () => {
+    await createLimit(system, { amount: D("1000.00"), periodMonths: 6, validFrom: day("2026-01-01") });
+    const now = new Date("2026-11-25T15:00:00Z");
+    const todayMidnightBrasilia = new Date("2026-11-25T03:00:00Z");
+
+    await createLimit(system, { amount: D("2000.00"), periodMonths: 6, validFrom: todayMidnightBrasilia }, now);
+    expect(await limitsInOrder()).toHaveLength(2);
+
+    // um segundo antes da meia-noite de Brasília ainda é "ontem"
+    await expect(createLimit(system, { amount: D("3000.00"), periodMonths: 6, validFrom: new Date("2026-11-25T02:59:59Z") }, now))
+        .rejects.toThrow(BusinessRuleError);
+});
+
+it("o primeiro limite pode começar no passado", async () => {
+    const limit = await createLimit(system, { amount: D("1000.00"), periodMonths: 6, validFrom: day("2020-01-01") }, day("2026-11-25"));
+    expect(limit.validFrom).toEqual(day("2020-01-01"));
 });

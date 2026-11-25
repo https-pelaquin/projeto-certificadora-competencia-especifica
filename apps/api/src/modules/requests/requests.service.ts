@@ -22,7 +22,10 @@ export function sumAccumulatedByRequester(db: Db, data: { requesterId: number; s
 }
 
 export async function changeStatus(db: Db, actor: Actor, id: number, from: RequestStatus, to: RequestStatus, justification?: string) {
-    const after = await requestsRepository.updateStatus(db, id, to);
+    const after = await requestsRepository.updateStatus(db, id, from, to);
+    if (!after) {
+        throw new ConflictError("A solicitação mudou de status e a operação foi recusada");
+    }
     await audit.record(db, actor, {
         action: "REQUEST_STATUS_CHANGED",
         entityType: "Request",
@@ -81,7 +84,7 @@ export async function markInVoting(db: Db, id: number, actor: Actor) {
     return changeStatus(db, actor, id, request.status, "IN_VOTING");
 }
 
-// Aprovada: provisiona se houver saldo, senão fica AWAITING_BALANCE (a decisão do conselho não se perde). [VALIDAR]
+// Aprovada: provisiona se houver saldo, senão fica AWAITING_BALANCE (a decisão do conselho não se perde).
 export async function applyVotingResult(db: Db, id: number, result: VotingResult, actor: Actor) {
     const request = await getForVoting(db, id);
     if (request.status !== "IN_VOTING") {
@@ -94,5 +97,9 @@ export async function applyVotingResult(db: Db, id: number, result: VotingResult
 
     await budgetService.lockBudget(db, request.budgetId);
     const provisioned = await budgetService.tryProvision(db, actor, { budgetId: request.budgetId, requestId: id, amount: request.amount });
-    return changeStatus(db, actor, id, request.status, provisioned ? "PROVISIONED" : "AWAITING_BALANCE");
+    const after = await changeStatus(db, actor, id, request.status, provisioned ? "PROVISIONED" : "AWAITING_BALANCE");
+    if(provisioned){
+       await notifyProvisioned(db, after);
+    }
+    return after;
 }
