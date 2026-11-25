@@ -1,7 +1,7 @@
 import { Prisma } from "../../../generated/prisma/client";
 import { NotFoundError } from "../../shared/errors";
 import { balanceOut, moneyOut } from "../../shared/money";
-import { prisma } from "../../shared/prisma";
+import { prisma, SNAPSHOT } from "../../shared/prisma";
 import * as budgetService from "../budget/budget.service";
 import * as dashboardRepository from "./dashboard.repository";
 
@@ -13,24 +13,26 @@ const dec = (value: Prisma.Decimal | string | null | undefined) => new Prisma.De
 // Indicadores do ano (RF23): saldo, solicitações por situação, valores por mês e rankings.
 // Canceladas ficam fora dos valores por mês e dos rankings. [VALIDAR] o que o cliente quer ver aqui.
 export async function getDashboard(year: number) {
-    const budget = await budgetService.findBudgetByYear(prisma, year);
-    if (!budget) {
-        throw new NotFoundError(`Não há orçamento cadastrado para ${year}`);
-    }
+    // Todas as consultas na mesma foto do banco: os números do painel precisam bater entre si.
+    // Em sequência (e não Promise.all): dentro de uma transação existe uma só conexão.
+    const { budget, balance, byStatus, requested, paid, requesters, categories, users, categoryRows } = await prisma.$transaction(async (tx) => {
+        const budget = await budgetService.findBudgetByYear(tx, year);
+        if (!budget) {
+            throw new NotFoundError(`Não há orçamento cadastrado para ${year}`);
+        }
 
-    const [balance, byStatus, requested, paid, requesters, categories] = await Promise.all([
-        budgetService.getBalance(prisma, budget.id),
-        dashboardRepository.countByStatus(prisma, budget.id),
-        dashboardRepository.requestedByMonth(prisma, budget.id),
-        dashboardRepository.paidByMonth(prisma, budget.id),
-        dashboardRepository.topRequesters(prisma, budget.id, RANKING_SIZE),
-        dashboardRepository.topCategories(prisma, budget.id, RANKING_SIZE),
-    ]);
+        const balance = await budgetService.getBalance(tx, budget.id);
+        const byStatus = await dashboardRepository.countByStatus(tx, budget.id);
+        const requested = await dashboardRepository.requestedByMonth(tx, budget.id);
+        const paid = await dashboardRepository.paidByMonth(tx, budget.id);
+        const requesters = await dashboardRepository.topRequesters(tx, budget.id, RANKING_SIZE);
+        const categories = await dashboardRepository.topCategories(tx, budget.id, RANKING_SIZE);
+        const users = await dashboardRepository.userNames(tx, requesters.map((r) => r.requesterId));
+        const categoryRows = await dashboardRepository.categoryNames(tx, categories.map((c) => c.categoryId));
 
-    const [users, categoryRows] = await Promise.all([
-        dashboardRepository.userNames(prisma, requesters.map((r) => r.requesterId)),
-        dashboardRepository.categoryNames(prisma, categories.map((c) => c.categoryId)),
-    ]);
+        return { budget, balance, byStatus, requested, paid, requesters, categories, users, categoryRows };
+    }, SNAPSHOT);
+
     const userName = new Map(users.map((u) => [u.id, u.name]));
     const categoryName = new Map(categoryRows.map((c) => [c.id, c.name]));
 

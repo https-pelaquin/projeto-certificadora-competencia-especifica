@@ -7,3 +7,7 @@ export const prisma = new PrismaClient({
 });
 
 export type Db = Prisma.TransactionClient;
+
+// Transação só de leitura que enxerga uma "foto" do banco: todas as consultas dela veem o mesmo instante.
+// Para relatórios e painéis, em que várias consultas precisam bater entre si.
+export const SNAPSHOT = { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead } as const;
