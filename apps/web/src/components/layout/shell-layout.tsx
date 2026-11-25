@@ -15,6 +15,7 @@ import {
   WalletCards,
   ListChecks,
   Tags,
+  ScrollText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -51,6 +52,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     icon: Vote,
     path: '/deliberacoes',
     roles: ['PROFESSOR', 'COUNCIL_MEMBER', 'HEAD', 'FINANCIAL_ADMIN'],
+  },
+  {
+    label: 'Histórico e Auditoria',
+    icon: ScrollText,
+    path: '/auditoria',
+    roles: ['HEAD', 'FINANCIAL_ADMIN'],
+    permissions: ['audit:read'],
   },
   {
     label: 'Operações',
