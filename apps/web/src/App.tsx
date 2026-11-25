@@ -7,12 +7,14 @@ import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { ShellLayout } from '@/components/layout/shell-layout';
 import { ProtectedRoute } from '@/components/layout/protected-route';
 import {
+  AnalyticsPage,
   CategoriesPage,
   FinancePage,
   LoginPage,
   OperationalRequestsPage,
   OverviewPage,
   RequestDetailPage,
+  ReportsPage,
   RequestsPage,
   UsersPage,
   VotingDetailPage,
@@ -112,6 +114,24 @@ export default function App() {
                     element={
                       <ProtectedRoute allowedPermissions={['categories:manage']}>
                         <CategoriesPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/analise-financeira"
+                    element={
+                      <ProtectedRoute allowedRoles={['HEAD', 'FINANCIAL_ADMIN']}>
+                        <AnalyticsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+
+                  <Route
+                    path="/relatorios"
+                    element={
+                      <ProtectedRoute allowedRoles={['HEAD', 'FINANCIAL_ADMIN']}>
+                        <ReportsPage />
                       </ProtectedRoute>
                     }
                   />
