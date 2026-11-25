@@ -22,7 +22,10 @@ export function sumAccumulatedByRequester(db: Db, data: { requesterId: number; s
 }
 
 export async function changeStatus(db: Db, actor: Actor, id: number, from: RequestStatus, to: RequestStatus, justification?: string) {
-    const after = await requestsRepository.updateStatus(db, id, to);
+    const after = await requestsRepository.updateStatus(db, id, from, to);
+    if (!after) {
+        throw new ConflictError("A solicitação mudou de status e a operação foi recusada");
+    }
     await audit.record(db, actor, {
         action: "REQUEST_STATUS_CHANGED",
         entityType: "Request",

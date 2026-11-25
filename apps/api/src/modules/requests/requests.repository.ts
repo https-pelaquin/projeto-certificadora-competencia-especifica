@@ -42,8 +42,10 @@ export function findById(db: Db, id: number) {
     return db.request.findUnique({ where: { id } });
 }
 
-export function updateStatus(db: Db, id: number, status: RequestStatus) {
-    return db.request.update({ where: { id }, data: { status } });
+export async function updateStatus(db: Db, id: number, from: RequestStatus, to: RequestStatus) {
+    const { count } = await db.request.updateMany({ where: { id, status: from }, data: { status: to } });
+    if (count === 0) return null;
+    return db.request.findUniqueOrThrow({ where: { id } });
 }
 
 export function update(db: Db, id: number, data: {
