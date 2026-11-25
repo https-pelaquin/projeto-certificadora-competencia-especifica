@@ -11,6 +11,8 @@ import { createRequest } from "../request-creation.service";
 
 beforeEach(resetDatabase);
 
+
+
 async function create(s: Awaited<ReturnType<typeof setupFinance>>, amount: string, overrides: Partial<{ categoryId: number; budgetId: number; description: string }> = {}) {
     return createRequest(userActor(s.requester), {
         categoryId: s.category.id,
@@ -20,6 +22,8 @@ async function create(s: Awaited<ReturnType<typeof setupFinance>>, amount: strin
         ...overrides,
     });
 }
+
+
 
 describe("avaliação automática", () => {
     it("dentro do limite e com saldo: provisiona na hora", async () => {
@@ -103,6 +107,7 @@ describe("avaliação automática", () => {
 });
 
 describe("validações e erros", () => {
+
     it("sem limite vigente: recusa e não grava nada", async () => {
         const budget = await createBudget(system, { year: 2026, initialAmount: D("10000.00") });
         const category = await prisma.expenseCategory.create({ data: { name: "Eventos" } });
@@ -174,3 +179,16 @@ describe("concorrência", () => {
         expect(await ledgerOf(s.budget.id)).toEqual(["ADJUSTMENT_OUT 900.00"]);
     });
 });
+
+it("espera ano certo", async() =>{
+        const now = new Date("2027-01-01T01:00:00Z");
+        const limit = await createLimit(system, {amount: D("400.00"), periodMonths: 6, validFrom:new Date("2025-01-01T00:00:00Z")});
+        const budget = await createBudget(system, {year: 2026, initialAmount: D("10000.00")});
+        const budget2 = await createBudget(system, {year: 2027, initialAmount: D("20000.00")});
+        const user = await prisma.user.create({ data: { name: "Ana", email: "ana@dacom.test" } });
+        const category = await prisma.expenseCategory.create({ data: { name: "Eventos" } });
+        const request = await createRequest(userActor(user), { categoryId: category.id, description: "test", amount: D("200.00")},now); 
+        
+        
+        expect(request.budgetId).toBe(budget.id);
+    });

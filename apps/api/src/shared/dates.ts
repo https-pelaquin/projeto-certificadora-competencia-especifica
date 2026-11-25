@@ -10,3 +10,8 @@ export function addMonths(date: Date, months: number): Date {
         date.getUTCHours(), date.getUTCMinutes(), date.getUTCSeconds(), date.getUTCMilliseconds(),
     ));
 }
+
+export function dateBrasilia(date: Date):number{
+    const formatedDate =  Intl.DateTimeFormat('pt-BR', {year:'numeric', timeZone:"America/Sao_Paulo"}).format(date);
+    return Number(formatedDate);
+}
