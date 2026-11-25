@@ -14,7 +14,6 @@ import { RequestsOverviewCards } from '@/features/requests/components/requests-o
 import { useRequests } from '@/features/requests/api';
 import { RequestModal } from '@/features/solicitations/request-modal';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { EXPENSE_CATEGORY_LABELS } from '@/types';
 
 export function OverviewPage() {
   const navigate = useNavigate();
@@ -23,8 +22,8 @@ export function OverviewPage() {
   const { data: requestsResponse, isLoading, isError } = useRequests();
 
   const allRequests = useMemo(
-    () => requestsResponse?.data ?? [],
-    [requestsResponse?.data],
+    () => requestsResponse?.items ?? [],
+    [requestsResponse?.items],
   );
   const recentRequests = useMemo(() => allRequests.slice(0, 4), [allRequests]);
 
@@ -64,8 +63,8 @@ export function OverviewPage() {
 
       {/* Cards de Limite Acumulado e Distribuição */}
       <RequestsOverviewCards
-        summary={requestsResponse?.summary}
         requests={allRequests}
+        total={requestsResponse?.total}
         isLoading={isLoading}
         isError={isError}
       />
@@ -114,7 +113,7 @@ export function OverviewPage() {
                       {req.description}
                     </p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      {EXPENSE_CATEGORY_LABELS[req.category]} • {formatDate(req.createdAt)}
+                      {req.category.name} • {formatDate(req.createdAt)}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">

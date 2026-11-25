@@ -48,17 +48,23 @@ function validateTenureRules(
 export function createInviteUserSchema(hasActiveHead: boolean) {
   return z
     .object({
-      name: z.string().trim().min(3, 'Informe o nome completo do usuário'),
+      name: z.string().trim().min(3, 'Informe o nome completo do usuário').max(120),
       email: z
         .string()
         .trim()
-        .email('E-mail institucional inválido')
-        .refine((val) => val.toLowerCase().endsWith('@utfpr.edu.br'), {
-          message: 'Utilize o e-mail institucional (@utfpr.edu.br)',
-        }),
-      ...tenureFields,
+        .email('E-mail inválido'),
+      role: roleSchema,
     })
-    .superRefine((data, ctx) => validateTenureRules(data, ctx, hasActiveHead));
+    .superRefine((data, ctx) => {
+      if (hasActiveHead && data.role === 'HEAD') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['role'],
+          message:
+            'Já existe outro Chefe de Departamento com mandato vigente ativo.',
+        });
+      }
+    });
 }
 
 export function createAssignProfileSchema(hasActiveHead: boolean) {

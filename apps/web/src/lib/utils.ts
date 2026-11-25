@@ -7,14 +7,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Formata um valor em centavos para moeda brasileira (R$).
- * @example formatCurrency(150000) => "R$ 1.500,00"
+ * Formata um valor em reais (string decimal da API ou número) para moeda brasileira (R$).
+ * @example formatCurrency("1500.00") => "R$ 1.500,00"
+ * @example formatCurrency(1500) => "R$ 1.500,00"
  */
-export function formatCurrency(cents: number): string {
+export function formatCurrency(value: number | string): string {
+  const numeric = typeof value === 'string' ? Number(value) : value;
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
-  }).format(cents / 100);
+  }).format(Number.isFinite(numeric) ? numeric : 0);
 }
 
 /**

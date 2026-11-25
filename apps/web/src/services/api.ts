@@ -6,7 +6,6 @@ import type {
   AuthUser,
   LoginPayload,
   LoginResponse,
-  UpdateAvatarPayload,
 } from '@/types';
 
 export {
@@ -25,19 +24,12 @@ export {
 } from '@/features/users/api';
 
 function normalizeAuthUser(response: AuthMeResponse): AuthUser {
-  const now = new Date().toISOString();
   const roles = response.roles;
   return {
     id: String(response.id),
     name: response.name,
     email: response.email,
     active: true,
-    profiles: roles.map((role, index) => ({
-      id: `session-${index}-${role}`,
-      role,
-      startsAt: now,
-      endsAt: null,
-    })),
     activeRoles: roles,
     availableRoles: roles,
     activeRole: resolvePrimaryRole(roles),
@@ -46,12 +38,9 @@ function normalizeAuthUser(response: AuthMeResponse): AuthUser {
 }
 
 export async function fetchCurrentSession(): Promise<AuthSessionResponse> {
-  const isOnLoginPage =
-    typeof window !== 'undefined' && window.location.pathname === '/login';
-
   const response = await apiClient.get<AuthMeResponse>('/api/auth/me', {
-    skipErrorToast: isOnLoginPage,
-    skipAuthRedirect: isOnLoginPage,
+    skipErrorToast: true,
+    skipAuthRedirect: true,
   });
   return { authenticated: true, user: normalizeAuthUser(response) };
 }
@@ -73,14 +62,8 @@ export function logoutSession(): Promise<void> {
   });
 }
 
-export function updateMyAvatar(
-  payload: UpdateAvatarPayload,
-): Promise<{ user: AuthUser }> {
-  return apiClient.patch<{ user: AuthUser }>('/api/auth/me/avatar', payload);
-}
-
 export function forgotPassword(email: string): Promise<{ message: string }> {
-  return apiClient.post<void>('/api/auth/forgot-password', { email }).then(() => ({
+  return apiClient.post<void>('/api/auth/password/forgot', { email }).then(() => ({
     message: 'Se o e-mail estiver cadastrado, as instruções foram enviadas.',
   }));
 }
@@ -89,7 +72,7 @@ export function resetPassword(
   token: string,
   newPassword: string,
 ): Promise<{ message: string }> {
-  return apiClient.post<void>('/api/auth/reset-password', {
+  return apiClient.post<void>('/api/auth/password/reset', {
     token,
     password: newPassword,
   }).then(() => ({ message: 'Senha redefinida com sucesso.' }));

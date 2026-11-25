@@ -58,7 +58,10 @@ export interface OperationalRequest {
 export type OperationalRequestListItem = Pick<
   OperationalRequest,
   'id' | 'status' | 'description' | 'amount' | 'createdAt' | 'updatedAt' | 'requester' | 'category'
->;
+> & {
+  canEdit?: boolean;
+  canCancel?: boolean;
+};
 
 export interface OperationalRequestsPage {
   items: OperationalRequestListItem[];

@@ -10,7 +10,6 @@ import {
   Menu,
   Building2,
   Shield,
-  Camera,
   Vote,
   WalletCards,
   ListChecks,
@@ -20,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { UserAvatar } from '@/components/shared';
-import { ProfileAvatarModal } from '@/features/auth/components/profile-avatar-modal';
 import { useAuth } from '@/hooks/use-auth';
 import { ROLE_LABELS, type Permission, type Role } from '@/types';
 import { cn } from '@/lib/utils';
@@ -29,7 +27,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   path: string;
-  roles: Role[];
+  roles?: Role[];
   permissions?: Permission[];
 }
 
@@ -38,13 +36,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     label: 'Visão Geral',
     icon: LayoutDashboard,
     path: '/docente',
-    roles: ['PROFESSOR'],
+    permissions: ['requests:create'],
   },
   {
     label: 'Solicitações',
     icon: FileText,
     path: '/solicitacoes',
-    roles: ['PROFESSOR'],
+    permissions: ['requests:create'],
   },
   {
     label: 'Deliberações',
@@ -96,14 +94,15 @@ const ALL_NAV_ITEMS: NavItem[] = [
 export function ShellLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
   const { user, activeRole, hasAnyActiveRole, hasAnyPermission, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Exibe apenas as rotas cujos perfis exigidos estejam vigentes na sessão atual
+  // Exibe apenas as rotas cujas permissões/perfis exigidos estejam vigentes na sessão atual
   const navItems = ALL_NAV_ITEMS.filter(
-    (item) => hasAnyActiveRole(item.roles) && (!item.permissions || hasAnyPermission(item.permissions)),
+    (item) =>
+      (!item.roles || hasAnyActiveRole(item.roles)) &&
+      (!item.permissions || hasAnyPermission(item.permissions)),
   );
 
   const handleLogout = async () => {
@@ -209,32 +208,19 @@ export function ShellLayout() {
         </div>
       )}
 
-      {/* Footer: User identification & direct trigger to change profile photo */}
+      {/* Footer: User identification */}
       <div className="p-3 border-t border-[#164E3F] bg-[#0A261E]">
-        <button
-          type="button"
-          data-testid="btn-sidebar-avatar"
-          onClick={() => {
-            setMobileOpen(false);
-            setAvatarModalOpen(true);
-          }}
-          title="Alterar foto de perfil"
+        <div
           className={cn(
-            'group w-full flex items-center gap-3 p-2 rounded-lg text-left transition-colors hover:bg-white/10 focus:outline-hidden cursor-pointer',
+            'w-full flex items-center gap-3 p-2 rounded-lg text-left',
             collapsed && 'justify-center p-1',
           )}
         >
-          <div className="relative shrink-0">
-            <UserAvatar
-              name={user?.name}
-              avatarUrl={user?.avatarUrl}
-              className="h-9 w-9 ring-2 ring-emerald-500/30"
-              fallbackClassName="bg-gradient-to-tr from-[#164E3F] to-emerald-600 text-white text-xs"
-            />
-            <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[#0F382C] ring-2 ring-[#0A261E] opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="h-2.5 w-2.5" />
-            </span>
-          </div>
+          <UserAvatar
+            name={user?.name}
+            className="h-9 w-9 ring-2 ring-emerald-500/30 shrink-0"
+            fallbackClassName="bg-gradient-to-tr from-[#164E3F] to-emerald-600 text-white text-xs"
+          />
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-white truncate">{user?.name || 'Usuário'}</p>
@@ -244,7 +230,7 @@ export function ShellLayout() {
               </p>
             </div>
           )}
-        </button>
+        </div>
 
         {/* Action Logout button */}
         <button
@@ -306,17 +292,9 @@ export function ShellLayout() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* User pill (abre modal de foto de perfil ao clicar) */}
-            <button
-              type="button"
-              data-testid="btn-header-avatar"
-              onClick={() => setAvatarModalOpen(true)}
-              title="Alterar foto de perfil"
-              className="flex items-center gap-2 rounded-lg px-1.5 py-1 hover:bg-slate-50 transition-colors cursor-pointer"
-            >
+            <div className="flex items-center gap-2 rounded-lg px-1.5 py-1">
               <UserAvatar
                 name={user?.name}
-                avatarUrl={user?.avatarUrl}
                 className="h-8 w-8 ring-1 ring-slate-200"
                 fallbackClassName="bg-[#164E3F] text-white text-xs"
               />
@@ -324,7 +302,7 @@ export function ShellLayout() {
                 <span className="text-xs font-semibold text-slate-900 leading-tight">{user?.name}</span>
                 <span className="text-[10px] text-slate-500">{user?.email}</span>
               </div>
-            </button>
+            </div>
           </div>
         </header>
 
@@ -335,12 +313,6 @@ export function ShellLayout() {
           </div>
         </main>
       </div>
-
-      {/* Modal de alteração da foto de perfil */}
-      <ProfileAvatarModal
-        open={avatarModalOpen}
-        onOpenChange={setAvatarModalOpen}
-      />
     </div>
   );
 }

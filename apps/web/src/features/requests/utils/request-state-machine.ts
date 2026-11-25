@@ -1,9 +1,9 @@
 import type { RequestStatus } from '@/types';
 
-/** Status em que o valor solicitado já foi aprovado/liquidado e não pode mais ser alterado */
-const AMOUNT_LOCKED_STATUSES: ReadonlySet<RequestStatus> = new Set([
-  'PROVISIONED',
-  'PAID',
+/** Status em que o valor solicitado ainda pode ser alterado (espelha request-edit.service.ts) */
+const AMOUNT_EDITABLE_STATUSES: ReadonlySet<RequestStatus> = new Set([
+  'AWAITING_VOTING',
+  'AWAITING_COMPLEMENT',
 ]);
 
 /** Status terminais em que a solicitação não pode mais ser editada ou cancelada */
@@ -15,10 +15,10 @@ const NON_MODIFIABLE_STATUSES: ReadonlySet<RequestStatus> = new Set([
 
 /**
  * Indica se o campo de valor (`amount`) deve permanecer travado na edição.
- * Regra de negócio: após aprovação (`PROVISIONED` ou `PAID`), o valor é imutável.
+ * Regra de negócio do backend: o valor só pode ser alterado em `AWAITING_VOTING` ou `AWAITING_COMPLEMENT`.
  */
 export function isAmountLocked(status: RequestStatus): boolean {
-  return AMOUNT_LOCKED_STATUSES.has(status);
+  return !AMOUNT_EDITABLE_STATUSES.has(status);
 }
 
 /**
@@ -29,13 +29,15 @@ export function canModifyRequest(status: RequestStatus): boolean {
   return !NON_MODIFIABLE_STATUSES.has(status);
 }
 
-/** Indica se o botão "Editar" deve estar habilitado para o status atual */
-export function canEditRequest(status: RequestStatus): boolean {
+/** Indica se o botão "Editar" deve estar habilitado (prioriza flag `canEdit` da API quando presente) */
+export function canEditRequest(status: RequestStatus, canEdit?: boolean): boolean {
+  if (typeof canEdit === 'boolean') return canEdit;
   return canModifyRequest(status);
 }
 
-/** Indica se o botão "Cancelar" deve estar habilitado para o status atual */
-export function canCancelRequest(status: RequestStatus): boolean {
+/** Indica se o botão "Cancelar" deve estar habilitado (prioriza flag `canCancel` da API quando presente) */
+export function canCancelRequest(status: RequestStatus, canCancel?: boolean): boolean {
+  if (typeof canCancel === 'boolean') return canCancel;
   return canModifyRequest(status);
 }
 

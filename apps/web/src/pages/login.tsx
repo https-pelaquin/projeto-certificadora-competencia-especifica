@@ -31,13 +31,12 @@ const loginSchema = z.object({
   email: z
     .string()
     .trim()
-    .min(1, 'Informe o seu e-mail institucional.')
-    .email('E-mail institucional inválido.')
-    .refine((val) => val.toLowerCase().endsWith('@utfpr.edu.br'), {
-      message:
-        'Utilize obrigatoriamente seu e-mail institucional (@utfpr.edu.br).',
-    }),
-  password: z.string().min(6, 'A senha deve possuir ao menos 6 caracteres.'),
+    .min(1, 'Informe o seu e-mail.')
+    .email('E-mail inválido.'),
+  password: z
+    .string()
+    .min(8, 'A senha deve possuir ao menos 8 caracteres.')
+    .max(72, 'A senha deve possuir no máximo 72 caracteres.'),
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
@@ -46,18 +45,18 @@ const forgotSchema = z.object({
   email: z
     .string()
     .trim()
-    .min(1, 'Insira seu e-mail institucional (@utfpr.edu.br)')
-    .email('E-mail institucional inválido')
-    .refine((val) => val.toLowerCase().endsWith('@utfpr.edu.br'), {
-      message: 'Insira seu e-mail institucional (@utfpr.edu.br)',
-    }),
+    .min(1, 'Insira seu e-mail')
+    .email('E-mail inválido'),
 });
 
 type ForgotFormValues = z.infer<typeof forgotSchema>;
 
 const resetSchema = z.object({
-  token: z.string().min(4, 'O token deve ter pelo menos 4 dígitos'),
-  newPassword: z.string().min(6, 'A nova senha deve ter no mínimo 6 caracteres'),
+  token: z.string().min(1, 'Informe o token recebido por e-mail').max(200),
+  newPassword: z
+    .string()
+    .min(8, 'A nova senha deve ter no mínimo 8 caracteres')
+    .max(72, 'A nova senha deve ter no máximo 72 caracteres'),
 });
 
 type ResetFormValues = z.infer<typeof resetSchema>;

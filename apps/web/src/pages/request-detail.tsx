@@ -73,12 +73,20 @@ export function RequestDetailPage() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
 
+  const handleGoBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/');
+    }
+  };
+
   if (id === null) {
     return (
       <div className="flex min-h-80 flex-col items-center justify-center text-center">
         <AlertCircle className="mb-3 h-10 w-10 text-red-500" />
         <h1 className="text-lg font-bold text-slate-900">Solicitação inválida</h1>
-        <Button variant="outline" className="mt-4" onClick={() => navigate('/solicitacoes')}>Voltar às solicitações</Button>
+        <Button variant="outline" className="mt-4" onClick={handleGoBack}>Voltar</Button>
       </div>
     );
   }
@@ -101,7 +109,7 @@ export function RequestDetailPage() {
         <AlertCircle className="mb-3 h-10 w-10 text-red-500" />
         <h1 className="text-lg font-bold text-slate-900">Não foi possível carregar a solicitação</h1>
         <div className="mt-4 flex gap-2">
-          <Button variant="outline" onClick={() => navigate('/solicitacoes')}>Voltar</Button>
+          <Button variant="outline" onClick={handleGoBack}>Voltar</Button>
           <Button onClick={() => requestQuery.refetch()}>Tentar novamente</Button>
         </div>
       </div>

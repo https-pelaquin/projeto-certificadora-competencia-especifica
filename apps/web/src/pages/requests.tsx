@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Search,
   XCircle,
   Pencil,
-  Paperclip,
+  Eye,
   AlertCircle,
   Lock,
 } from 'lucide-react';
@@ -30,29 +31,28 @@ import {
   StatusBadge,
   EmptyState,
   TableSkeleton,
-  ConfirmDialog,
 } from '@/components/shared';
 import { RequestModal } from '@/features/solicitations/request-modal';
-import {
-  useCancelRequest,
-  useRequests,
-} from '@/features/requests/api';
+import { CancelRequestDialog } from '@/features/operational-requests/components/cancel-request-dialog';
+import { useCategories } from '@/features/finance/api/use-finance';
+import { useRequests } from '@/features/requests/api';
 import {
   canCancelRequest,
   canEditRequest,
   canModifyRequest,
   isAmountLocked,
 } from '@/features/requests/utils/request-state-machine';
+import { useAuth } from '@/hooks/use-auth';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
-  EXPENSE_CATEGORY_LABELS,
   REQUEST_STATUS_LABELS,
-  type ExpenseCategory,
   type Request,
   type RequestStatus,
 } from '@/types';
 
 export function RequestsPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRequest, setEditingRequest] = useState<Request | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Request | null>(null);
@@ -68,20 +68,22 @@ export function RequestsPage() {
     isError,
   } = useRequests();
 
-  const cancelMutation = useCancelRequest();
+  const { data: categories = [] } = useCategories();
 
   const allRequests = useMemo(
-    () => requestsResponse?.data ?? [],
-    [requestsResponse?.data],
+    () => requestsResponse?.items ?? [],
+    [requestsResponse?.items],
   );
 
   // Filter requests
   const filteredRequests = useMemo(() => {
+    const query = searchQuery.toLowerCase();
     return allRequests.filter((item) => {
       const matchSearch =
-        item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        EXPENSE_CATEGORY_LABELS[item.category].toLowerCase().includes(searchQuery.toLowerCase());
-      const matchCategory = categoryFilter === 'ALL' || item.category === categoryFilter;
+        item.description.toLowerCase().includes(query) ||
+        item.category.name.toLowerCase().includes(query);
+      const matchCategory =
+        categoryFilter === 'ALL' || String(item.category.id) === categoryFilter;
       const matchStatus = statusFilter === 'ALL' || item.status === statusFilter;
       return matchSearch && matchCategory && matchStatus;
     });
@@ -111,7 +113,7 @@ export function RequestsPage() {
               data-testid="requests-total-count"
               className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-[#164E3F] text-white"
             >
-              {allRequests.length}
+              {requestsResponse?.total ?? allRequests.length}
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
@@ -152,18 +154,20 @@ export function RequestsPage() {
             >
               <SelectTrigger data-testid="select-filter-category" className="h-9 text-xs w-[170px] bg-white border-slate-200">
                 <SelectValue>
-                  {(val: string | null) =>
-                    !val || val === 'ALL'
-                      ? 'Todas as Categorias'
-                      : EXPENSE_CATEGORY_LABELS[val as ExpenseCategory] ?? val
-                  }
+                  {(val: string | null) => {
+                    if (!val || val === 'ALL') return 'Todas as Categorias';
+                    return (
+                      categories.find((cat) => String(cat.id) === val)?.name ??
+                      'Todas as Categorias'
+                    );
+                  }}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL" className="text-xs">Todas as Categorias</SelectItem>
-                {(Object.entries(EXPENSE_CATEGORY_LABELS) as [ExpenseCategory, string][]).map(([k, label]) => (
-                  <SelectItem key={k} value={k} className="text-xs">
-                    {label}
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={String(cat.id)} className="text-xs">
+                    {cat.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -249,15 +253,15 @@ export function RequestsPage() {
                   <TableHead className="text-xs font-bold">Descrição / Justificativa</TableHead>
                   <TableHead className="text-xs font-bold text-right">Valor (R$)</TableHead>
                   <TableHead className="text-xs font-bold">Data do Pedido</TableHead>
-                  <TableHead className="text-xs font-bold">Comprovante</TableHead>
+                  <TableHead className="text-xs font-bold">Solicitante</TableHead>
                   <TableHead className="text-xs font-bold">Status</TableHead>
                   <TableHead className="text-xs font-bold text-right pr-6">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredRequests.map((request) => {
-                  const editable = canEditRequest(request.status);
-                  const cancelable = canCancelRequest(request.status);
+                  const editable = canEditRequest(request.status, request.canEdit);
+                  const cancelable = canCancelRequest(request.status, request.canCancel);
                   const lockedTooltip =
                     request.status === 'PAID'
                       ? 'Solicitação paga: ações bloqueadas'
@@ -272,7 +276,7 @@ export function RequestsPage() {
                     >
                       {/* Categoria */}
                       <TableCell className="pl-6 font-semibold text-xs text-slate-900">
-                        {EXPENSE_CATEGORY_LABELS[request.category]}
+                        {request.category.name}
                       </TableCell>
 
                       {/* Descrição */}
@@ -280,7 +284,7 @@ export function RequestsPage() {
                         <p className="text-xs text-slate-800 font-medium line-clamp-1" title={request.description}>
                           {request.description}
                         </p>
-                        <span className="text-[10px] text-slate-400 font-mono">ID: {request.id}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">ID: #{request.id}</span>
                       </TableCell>
 
                       {/* Valor formatado */}
@@ -293,19 +297,9 @@ export function RequestsPage() {
                         {formatDate(request.createdAt)}
                       </TableCell>
 
-                      {/* Anexo */}
-                      <TableCell>
-                        {request.attachmentName ? (
-                          <span
-                            className="inline-flex items-center gap-1.5 text-xs text-[#164E3F] hover:text-[#0F382C] font-medium cursor-pointer"
-                            title="Visualizar anexo"
-                          >
-                            <Paperclip className="h-3.5 w-3.5 text-emerald-600" />
-                            <span className="truncate max-w-[120px]">{request.attachmentName}</span>
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">Sem anexo</span>
-                        )}
+                      {/* Solicitante */}
+                      <TableCell className="text-xs text-slate-600 whitespace-nowrap">
+                        {request.requester.name}
                       </TableCell>
 
                       {/* Badge de Status Semântica */}
@@ -313,9 +307,21 @@ export function RequestsPage() {
                         <StatusBadge status={request.status} />
                       </TableCell>
 
-                      {/* Ações com Máquina de Estados (PAID bloqueia Editar e Cancelar) */}
+                      {/* Ações com Máquina de Estados */}
                       <TableCell className="text-right pr-6">
                         <div className="flex items-center justify-end gap-1">
+                          <Button
+                            data-testid="btn-detail-request"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/solicitacoes/${request.id}`)}
+                            className="h-8 px-2 text-slate-600 hover:text-[#164E3F] hover:bg-emerald-50 text-xs gap-1 cursor-pointer"
+                            title="Ver detalhes da solicitação"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Detalhes</span>
+                          </Button>
+
                           <Button
                             data-testid="btn-edit-request"
                             variant="ghost"
@@ -340,7 +346,6 @@ export function RequestsPage() {
                             disabled={!cancelable}
                             onClick={() => {
                               if (cancelable) {
-                                cancelMutation.reset();
                                 setCancelTarget(request);
                               }
                             }}
@@ -369,32 +374,19 @@ export function RequestsPage() {
         isAmountLocked={editingRequest ? isAmountLocked(editingRequest.status) : false}
       />
 
-      {/* Modal de Confirmação Crítica para Cancelamento (com proteção anti double-submit) */}
-      <ConfirmDialog
-        open={Boolean(cancelTarget)}
-        onOpenChange={(open) => {
-          if (!open && !cancelMutation.isPending) {
-            cancelMutation.reset();
-            setCancelTarget(null);
-          }
-        }}
-        title="Cancelar Solicitação Financeira?"
-        description={`Você está prestes a cancelar a solicitação "${cancelTarget?.description}". Esta operação registrará o status CANCELED e liberará o saldo reservado.`}
-        confirmLabel="Sim, Cancelar Solicitação"
-        cancelLabel="Voltar"
-        variant="destructive"
-        confirmTestId="btn-confirm-cancel-request"
-        onConfirm={() => {
-          if (cancelTarget && !cancelMutation.isPending) {
-            cancelMutation.mutate(cancelTarget.id, {
-              onSuccess: () => {
-                setCancelTarget(null);
-              },
-            });
-          }
-        }}
-        isLoading={cancelMutation.isPending}
-      />
+      {/* Modal de Cancelamento com justificativa via POST /api/requests/:id/cancel */}
+      {cancelTarget && (
+        <CancelRequestDialog
+          requestId={cancelTarget.id}
+          justificationRequired={cancelTarget.requester.id !== Number(user?.id)}
+          open={Boolean(cancelTarget)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCancelTarget(null);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

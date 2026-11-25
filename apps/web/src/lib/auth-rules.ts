@@ -1,4 +1,4 @@
-import type { AuthUser, Permission, ProfileTenure, Role } from '@/types';
+import type { AuthUser, Permission, Role } from '@/types';
 
 const ROLE_PRIORITY: Role[] = [
   'HEAD',
@@ -11,7 +11,7 @@ const ROLE_PRIORITY: Role[] = [
  * Verifica se a vigência de um perfil está ativa na data de referência.
  */
 export function isTenureActive(
-  tenure: ProfileTenure,
+  tenure: { startsAt: string; endsAt: string | null },
   referenceDate: Date = new Date(),
 ): boolean {
   const refTime = referenceDate.getTime();
@@ -32,7 +32,7 @@ export function isTenureActive(
  * Extrai a lista única de perfis vigentes do usuário.
  */
 export function getActiveRoles(
-  profiles: ProfileTenure[],
+  profiles: Array<{ role: Role; startsAt: string; endsAt: string | null }>,
   active = true,
   referenceDate: Date = new Date(),
 ): Role[] {
@@ -49,16 +49,14 @@ export function getActiveRoles(
 
 /**
  * Verifica se o usuário autenticado está ativo e possui determinado perfil vigente.
+ * Confia em `activeRoles` já resolvido pela API.
  */
 export function hasActiveRole(
   user: AuthUser | null | undefined,
   role: Role,
-  referenceDate: Date = new Date(),
 ): boolean {
   if (!user || !user.active) return false;
-  return user.profiles.some(
-    (tenure) => tenure.role === role && isTenureActive(tenure, referenceDate),
-  );
+  return user.activeRoles.includes(role);
 }
 
 /**
@@ -67,9 +65,8 @@ export function hasActiveRole(
 export function hasAnyActiveRole(
   user: AuthUser | null | undefined,
   allowedRoles: Role[],
-  referenceDate: Date = new Date(),
 ): boolean {
-  return allowedRoles.some((role) => hasActiveRole(user, role, referenceDate));
+  return allowedRoles.some((role) => hasActiveRole(user, role));
 }
 
 /**

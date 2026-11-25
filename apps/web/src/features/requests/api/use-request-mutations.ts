@@ -5,11 +5,20 @@ import {
   updateRequest,
 } from './requests-api';
 import { requestsQueryKeys } from './use-requests';
-import type { CreateRequestPayload, UpdateRequestPayload } from '@/types';
+import type {
+  CancelRequestPayload,
+  CreateRequestPayload,
+  UpdateRequestPayload,
+} from '@/types';
 
 export interface UpdateRequestVariables {
-  id: string;
+  id: number | string;
   payload: UpdateRequestPayload;
+}
+
+export interface CancelRequestVariables {
+  id: number | string;
+  payload?: CancelRequestPayload;
 }
 
 /** Mutation para criação de nova solicitação financeira */
@@ -42,9 +51,14 @@ export function useCancelRequest() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (id: string) => cancelRequest(id),
+    mutationFn: ({ id, payload }: CancelRequestVariables) =>
+      cancelRequest(id, payload),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: requestsQueryKeys.all });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: requestsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: ['votings'] }),
+        queryClient.invalidateQueries({ queryKey: ['finance'] }),
+      ]);
     },
   });
 }
