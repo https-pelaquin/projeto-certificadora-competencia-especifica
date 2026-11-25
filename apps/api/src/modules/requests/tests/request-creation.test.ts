@@ -192,3 +192,25 @@ it("espera ano certo", async() =>{
         
         expect(request.budgetId).toBe(budget.id);
     });
+
+describe("ano do orçamento (fuso de Brasília)", () => {
+    async function twoYears() {
+        await createLimit(system, { amount: D("5000.00"), periodMonths: 12, validFrom: new Date("2020-01-01T00:00:00Z") });
+        const budget2026 = await createBudget(system, { year: 2026, initialAmount: D("10000.00") });
+        const budget2027 = await createBudget(system, { year: 2027, initialAmount: D("10000.00") });
+        const user = await prisma.user.create({ data: { name: "Ana", email: "ana@dacom.test" } });
+        const category = await prisma.expenseCategory.create({ data: { name: "Eventos" } });
+        const requestAt = (now: Date) => createRequest(userActor(user), { categoryId: category.id, description: "x", amount: D("100.00") }, now);
+        return { budget2026, budget2027, requestAt };
+    }
+
+    it("31/12 às 23h59 em Brasília (já 1º/01 em UTC) ainda é o orçamento do ano que acaba", async () => {
+        const { budget2026, requestAt } = await twoYears();
+        expect((await requestAt(new Date("2027-01-01T02:59:59Z"))).budgetId).toBe(budget2026.id);
+    });
+
+    it("à meia-noite de Brasília o orçamento passa a ser o do ano novo", async () => {
+        const { budget2027, requestAt } = await twoYears();
+        expect((await requestAt(new Date("2027-01-01T03:00:00Z"))).budgetId).toBe(budget2027.id);
+    });
+});

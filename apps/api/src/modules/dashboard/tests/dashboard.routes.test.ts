@@ -1,10 +1,11 @@
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../../app";
 import { prisma } from "../../../shared/prisma";
 import { resetDatabase } from "../../../test/db";
 import { createUser, loginAs } from "../../../test/factories";
-import { D, insertRequest, setupFinance, userActor } from "../../../test/finance";
+import { D, insertRequest, setupFinance, system, userActor } from "../../../test/finance";
+import { createBudget } from "../../budget/budget.service";
 import { recordPayment } from "../../payments/payments.service";
 import { createRequest } from "../../requests/request-creation.service";
 
@@ -111,5 +112,25 @@ describe("indicadores", () => {
         await prisma.budget.create({ data: { year: thisYear - 1, initialAmount: D("777.00") } });
         const res = await (await loginAs(app, s.head)).get(`/api/dashboard?year=${thisYear - 1}`);
         expect(res.body).toMatchObject({ year: thisYear - 1, balance: { total: "777.00" } });
+    });
+});
+
+describe("ano padrão (fuso de Brasília)", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("sem ?year, usa o ano de Brasília: 31/12 à noite ainda é o ano que acaba", async () => {
+        await createBudget(system, { year: 2026, initialAmount: D("1000.00") });
+        await createBudget(system, { year: 2027, initialAmount: D("2000.00") });
+        const head = await createUser({ roles: ["HEAD"] });
+
+        // O relógio é fixado antes do login: senão a sessão (criada na hora real) já nasce "vencida".
+        for (const [now, year] of [["2027-01-01T02:59:59Z", 2026], ["2027-01-01T03:00:00Z", 2027]] as const) {
+            vi.useFakeTimers({ toFake: ["Date"] });
+            vi.setSystemTime(new Date(now));
+            const res = await (await loginAs(app, head)).get("/api/dashboard");
+            expect(res.status, now).toBe(200);
+            expect(res.body.year, now).toBe(year);
+            vi.useRealTimers();
+        }
     });
 });
