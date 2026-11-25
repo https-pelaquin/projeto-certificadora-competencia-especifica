@@ -5,6 +5,7 @@ import type { AuthUser } from "../../types/express";
 import * as audit from "../audit/audit.service";
 import * as budgetService from "../budget/budget.service";
 import * as requestsRepository from "./requests.repository";
+import * as votingService from "../votings/votings.service";
 
 export type RequestFilters = {
     status?: RequestStatus;
@@ -36,7 +37,8 @@ export async function listRequests(user: AuthUser, filters: RequestFilters, page
 // Traz só o que é da solicitação: votos e comentários do conselho ficam no módulo de votações.
 export async function getRequest(user: AuthUser, id: number) {
     const request = await requestsRepository.findDetailed(prisma, id);
-    if (!request || (request.requesterId !== user.id && !user.permissions.has("requests:readAll"))) {
+    const canSee = request?.requesterId === user.id || user.permissions.has("requests:readAll") || (await votingService.isConvenedForRequest(prisma, id, user.id));
+    if (!request || !canSee) {
         throw new NotFoundError("Solicitação não encontrada");
     }
 

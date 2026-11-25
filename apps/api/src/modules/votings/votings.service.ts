@@ -320,3 +320,7 @@ export async function addComment(actor: UserActor, user: AuthUser, votingId: num
         return comment;
     });
 }
+
+export async function isConvenedForRequest(db: Db, requestId: number, userId: number){
+    return await votingsRepository.isConvenedForRequest(db, requestId, userId);
+}
