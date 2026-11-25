@@ -1,51 +1,41 @@
-import { useMemo, useState } from "react"
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
-  DEMO_ANALYTICS_DATA,
-  calculateBudgetIndicators,
-  calculatePurposeDistribution,
-  sumCompletedPaymentsByMonth,
-  summarizeRequestSituations,
-} from "@/features/analytics"
-import type { RequestPurpose, RequestStatus } from "@/features/analytics"
+  fetchAnalyticsCategories,
+  fetchAnalyticsRequests,
+  fetchDashboard,
+} from '@/features/analytics/dashboard-api'
+import type { AnalyticsRequestStatus } from '@/features/analytics/dashboard-api'
 
-const data = DEMO_ANALYTICS_DATA
-const purposes: Record<RequestPurpose, string> = {
-  academic_events: "Eventos acadêmicos",
-  equipment: "Equipamentos",
-  research_materials: "Materiais de pesquisa",
-  software_licenses: "Licenças de software",
-  travel: "Viagens e diárias",
+const statusLabels: Record<AnalyticsRequestStatus, string> = {
+  AWAITING_VOTING: 'Aguardando votação',
+  AWAITING_COMPLEMENT: 'Aguardando complemento',
+  AWAITING_BALANCE: 'Aguardando saldo',
+  IN_VOTING: 'Em votação',
+  PROVISIONED: 'Provisionada',
+  PAID: 'Paga',
+  REJECTED: 'Rejeitada',
+  CANCELED: 'Cancelada',
 }
-const statuses: Record<RequestStatus, string> = {
-  draft: "Rascunho",
-  submitted: "Enviada",
-  under_review: "Em análise",
-  approved: "Aprovada",
-  provisioned: "Provisionada",
-  partially_paid: "Pagamento parcial",
-  paid: "Paga",
-  rejected: "Rejeitada",
-  cancelled: "Cancelada",
-}
-const situations: Record<string, string> = {
-  pending: "Pendentes",
-  provisioned: "Provisionadas",
-  utilized: "Utilizadas",
-  closed: "Encerradas",
-}
-const currency = (cents: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-    cents / 100,
-  )
-const percent = (value: number) => `${value.toFixed(1).replace(".", ",")}%`
-const card = "rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-const chartColors = ["#0f766e", "#d69b39", "#4e88c7", "#8b5ec7", "#65b2a0"]
+const statusOptions = Object.entries(statusLabels) as Array<[
+  AnalyticsRequestStatus,
+  string,
+]>
+const moneyFormatter = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+})
+// A conversão para number é apenas para exibição/desenho de gráficos.
+// Regras e saldos monetários são calculados exclusivamente no backend.
+const amountNumber = (value: string | number) => Number(value)
+const currency = (value: string | number) => moneyFormatter.format(amountNumber(value))
+const percent = (value: number) => `${value.toFixed(1).replace('.', ',')}%`
+const card = 'rounded-2xl border border-slate-200 bg-white p-5 shadow-sm'
+const chartColors = ['#0f766e', '#d69b39', '#4e88c7', '#8b5ec7', '#65b2a0']
+const currentYear = new Date().getFullYear()
+const yearOptions = Array.from({ length: 5 }, (_, index) => currentYear - index)
 
-type ChartRow = {
-  label: string
-  amount: number
-  suffix?: string
-}
+type ChartRow = { label: string; amount: number; suffix?: string }
 
 function HorizontalChart({
   title,
@@ -64,20 +54,15 @@ function HorizontalChart({
       <h2 className="text-lg font-bold">{title}</h2>
       {description && <p className="mt-1 text-xs text-slate-500">{description}</p>}
       {rows.length === 0 ? (
-        <p className="mt-6 text-sm text-slate-500">
-          Nenhum registro para os filtros selecionados.
-        </p>
+        <p className="mt-6 text-sm text-slate-500">Nenhum registro neste exercício.</p>
       ) : (
         <div className="mt-6 space-y-5">
-          {rows.map((row, i) => (
+          {rows.map((row, index) => (
             <div key={row.label}>
               <div className="mb-2 flex items-baseline justify-between gap-2 text-sm">
                 <span className="font-medium">{row.label}</span>
                 <strong className="whitespace-nowrap">
-                  {row.suffix ??
-                    (valuesAreCurrency
-                      ? currency(row.amount)
-                      : String(row.amount))}
+                  {row.suffix ?? (valuesAreCurrency ? currency(row.amount) : String(row.amount))}
                 </strong>
               </div>
               <div
@@ -88,8 +73,8 @@ function HorizontalChart({
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
-                    width: `${(row.amount / max) * 100}%`,
-                    backgroundColor: chartColors[i % chartColors.length],
+                    width: `${Math.max(0, (row.amount / max) * 100)}%`,
+                    backgroundColor: chartColors[index % chartColors.length],
                   }}
                 />
               </div>
@@ -102,62 +87,49 @@ function HorizontalChart({
 }
 
 function BudgetDonut({
+  total,
   available,
   provisioned,
   utilized,
 }: {
+  total: number
   available: number
   provisioned: number
   utilized: number
 }) {
   const segments = [
-    { label: "Disponível", amount: available, color: chartColors[0] },
-    { label: "Provisionado", amount: provisioned, color: chartColors[1] },
-    { label: "Utilizado", amount: utilized, color: chartColors[2] },
+    { label: 'Disponível', amount: available, color: chartColors[0] },
+    { label: 'Provisionado', amount: provisioned, color: chartColors[1] },
+    { label: 'Utilizado', amount: utilized, color: chartColors[2] },
   ]
-  const total = available + provisioned + utilized
   let cumulative = 0
 
   return (
     <section className={card}>
       <h2 className="text-lg font-bold">Composição do orçamento</h2>
       <p className="mt-1 text-xs text-slate-500">Distribuição do orçamento anual</p>
-
       <div className="mt-6 grid min-w-0 grid-cols-1 items-center gap-6 min-[580px]:grid-cols-[190px_minmax(0,1fr)]">
         <div
           className="relative mx-auto aspect-square w-48 max-w-full shrink-0"
           role="img"
-          aria-label={segments
-            .map((s) => `${s.label}: ${currency(s.amount)}`)
-            .join("; ")}
+          aria-label={segments.map((segment) => `${segment.label}: ${currency(segment.amount)}`).join('; ')}
         >
-          <svg
-            viewBox="0 0 220 220"
-            className="h-full w-full -rotate-90"
-            aria-hidden="true"
-          >
-            <circle
-              cx="110"
-              cy="110"
-              r="78"
-              fill="none"
-              stroke="#edf2f1"
-              strokeWidth="26"
-            />
-            {segments.map((s) => {
+          <svg viewBox="0 0 220 220" className="h-full w-full -rotate-90" aria-hidden="true">
+            <circle cx="110" cy="110" r="78" fill="none" stroke="#edf2f1" strokeWidth="26" />
+            {segments.map((segment) => {
               const start = cumulative
-              const length = total === 0 ? 0 : (s.amount / total) * 100
+              const length = total === 0 ? 0 : Math.max(0, (segment.amount / total) * 100)
               cumulative += length
               return (
                 <circle
-                  key={s.label}
+                  key={segment.label}
                   cx="110"
                   cy="110"
                   r="78"
                   fill="none"
-                  stroke={s.color}
+                  stroke={segment.color}
                   strokeWidth="26"
-                  strokeDasharray={`${length} ${100 - length}`}
+                  strokeDasharray={`${length} ${Math.max(0, 100 - length)}`}
                   strokeDashoffset={-start}
                   pathLength="100"
                 />
@@ -171,28 +143,19 @@ function BudgetDonut({
             </strong>
           </div>
         </div>
-
         <ul className="min-w-0 space-y-3">
-          {segments.map((s) => (
-            <li
-              key={s.label}
-              className="min-w-0 rounded-lg bg-slate-50 px-3 py-2"
-            >
+          {segments.map((segment) => (
+            <li key={segment.label} className="min-w-0 rounded-lg bg-slate-50 px-3 py-2">
               <div className="flex min-w-0 items-center gap-2">
-                <span
-                  className="size-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: s.color }}
-                />
-                <span className="min-w-0 font-semibold text-sm text-slate-900">
-                  {s.label}
-                </span>
+                <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: segment.color }} />
+                <span className="min-w-0 font-semibold text-sm text-slate-900">{segment.label}</span>
               </div>
               <div className="mt-1 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 pl-5">
                 <span className="text-xs text-slate-500">
-                  {percent(total ? (s.amount / total) * 100 : 0)} do orçamento
+                  {percent(total ? (segment.amount / total) * 100 : 0)} do orçamento
                 </span>
                 <strong className="whitespace-nowrap text-sm tabular-nums text-slate-900">
-                  {currency(s.amount)}
+                  {currency(segment.amount)}
                 </strong>
               </div>
             </li>
@@ -204,69 +167,75 @@ function BudgetDonut({
 }
 
 export default function AnalyticsDashboard() {
-  const [year, setYear] = useState(String(data.budget.fiscalYear))
-  const [purpose, setPurpose] = useState("all")
-  const [status, setStatus] = useState("all")
-  const activeYear = Number(year) === data.budget.fiscalYear
-  const filteredRequests = useMemo(
-    () =>
-      activeYear
-        ? data.requests.filter(
-            (r) =>
-              (purpose === "all" || r.purpose === purpose) &&
-              (status === "all" || r.status === status),
-          )
-        : [],
-    [activeYear, purpose, status],
-  )
-  const indicators = calculateBudgetIndicators(data.budget)
-  const distribution = calculatePurposeDistribution(filteredRequests)
-  const summary = summarizeRequestSituations(filteredRequests)
-  const monthly = activeYear ? sumCompletedPaymentsByMonth(data.payments) : []
+  const [year, setYear] = useState(currentYear)
+  const [categoryId, setCategoryId] = useState('all')
+  const [status, setStatus] = useState<'all' | AnalyticsRequestStatus>('all')
+  const [page, setPage] = useState(1)
+
+  const dashboardQuery = useQuery({
+    queryKey: ['analytics', 'dashboard', year],
+    queryFn: () => fetchDashboard(year),
+    retry: false,
+  })
+  const categoriesQuery = useQuery({
+    queryKey: ['analytics', 'categories'],
+    queryFn: fetchAnalyticsCategories,
+  })
+  const requestsQuery = useQuery({
+    queryKey: ['analytics', 'requests', year, page, categoryId, status],
+    queryFn: () =>
+      fetchAnalyticsRequests({
+        year,
+        page,
+        categoryId: categoryId === 'all' ? undefined : Number(categoryId),
+        status: status === 'all' ? undefined : status,
+      }),
+    enabled: dashboardQuery.isSuccess,
+  })
+
+  const data = dashboardQuery.data
+  const balance = data?.balance
+  const annualTotal = balance ? amountNumber(balance.total) : 0
+  const available = balance ? amountNumber(balance.available) : 0
+  const provisioned = balance ? amountNumber(balance.provisioned) : 0
+  const utilized = balance ? amountNumber(balance.spent) : 0
+  const budgetPercentage = (amount: number) => (annualTotal ? (amount / annualTotal) * 100 : 0)
   const metrics = [
-    {
-      label: "Orçamento anual",
-      value: indicators.annualTotal,
-      detail: "Total do exercício",
-      color: chartColors[3],
-    },
-    {
-      label: "Disponível",
-      value: indicators.available,
-      detail: `${percent(indicators.availablePercentage)} do total`,
-      color: chartColors[0],
-    },
-    {
-      label: "Provisionado",
-      value: indicators.provisioned,
-      detail: `${percent(indicators.provisionedPercentage)} do total`,
-      color: chartColors[1],
-    },
-    {
-      label: "Utilizado",
-      value: indicators.utilized,
-      detail: `${percent(indicators.utilizedPercentage)} do total`,
-      color: chartColors[2],
-    },
+    { label: 'Orçamento anual', value: annualTotal, detail: 'Total do exercício', color: chartColors[3] },
+    { label: 'Disponível', value: available, detail: `${percent(budgetPercentage(available))} do total`, color: chartColors[0] },
+    { label: 'Provisionado', value: provisioned, detail: `${percent(budgetPercentage(provisioned))} do total`, color: chartColors[1] },
+    { label: 'Utilizado', value: utilized, detail: `${percent(budgetPercentage(utilized))} do total`, color: chartColors[2] },
   ]
+
+  const pages = Math.ceil((requestsQuery.data?.total ?? 0) / 20)
+  const requests = requestsQuery.data?.items ?? []
+
   return (
-    <div id="conteudo" className="space-y-6 text-slate-900">
+    <div id="conteudo" className="space-y-6 text-slate-900" data-testid="analytics-page">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="mb-1 text-sm font-semibold text-emerald-800">
-            Painel analítico
-          </p>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Análise financeira
-          </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            Acompanhe a execução orçamentária e as solicitações
-          </p>
+          <p className="mb-1 text-sm font-semibold text-emerald-800">Painel analítico</p>
+          <h1 className="text-3xl font-bold tracking-tight">Análise financeira</h1>
+          <p className="mt-2 text-sm text-slate-500">Acompanhe a execução orçamentária e as solicitações</p>
         </div>
-        <span className="rounded-full bg-amber-50 px-4 py-2 text-xs font-bold text-amber-800">
-          Dados de demonstração
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-800">
+            Dados da API
+          </span>
+          <button
+            type="button"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+            onClick={() => {
+              void dashboardQuery.refetch()
+              void requestsQuery.refetch()
+              void categoriesQuery.refetch()
+            }}
+          >
+            Atualizar dados
+          </button>
+        </div>
       </div>
+
       <section className={card} aria-label="Filtros de análise">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <label className="text-sm font-semibold">
@@ -274,25 +243,27 @@ export default function AnalyticsDashboard() {
             <select
               className="mt-2 block w-full rounded-xl border border-slate-200 bg-white p-3 font-normal focus-visible:outline-2 focus-visible:outline-emerald-700"
               value={year}
-              onChange={(e) => setYear(e.target.value)}
+              onChange={(event) => {
+                setYear(Number(event.target.value))
+                setPage(1)
+              }}
             >
-              <option value="2024">2024</option>
-              <option value="2025">2025 (sem dados)</option>
-              <option value="2026">2026 (sem dados)</option>
+              {yearOptions.map((option) => <option key={option} value={option}>{option}</option>)}
             </select>
           </label>
           <label className="text-sm font-semibold">
             Finalidade
             <select
               className="mt-2 block w-full rounded-xl border border-slate-200 bg-white p-3 font-normal focus-visible:outline-2 focus-visible:outline-emerald-700"
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
+              value={categoryId}
+              onChange={(event) => {
+                setCategoryId(event.target.value)
+                setPage(1)
+              }}
             >
               <option value="all">Todas</option>
-              {Object.entries(purposes).map(([key, name]) => (
-                <option value={key} key={key}>
-                  {name}
-                </option>
+              {(categoriesQuery.data ?? []).map((category) => (
+                <option key={category.id} value={category.id}>{category.name}</option>
               ))}
             </select>
           </label>
@@ -301,24 +272,24 @@ export default function AnalyticsDashboard() {
             <select
               className="mt-2 block w-full rounded-xl border border-slate-200 bg-white p-3 font-normal focus-visible:outline-2 focus-visible:outline-emerald-700"
               value={status}
-              onChange={(e) => setStatus(e.target.value)}
+              onChange={(event) => {
+                setStatus(event.target.value as 'all' | AnalyticsRequestStatus)
+                setPage(1)
+              }}
             >
               <option value="all">Todas</option>
-              {Object.entries(statuses).map(([key, name]) => (
-                <option value={key} key={key}>
-                  {name}
-                </option>
-              ))}
+              {statusOptions.map(([key, name]) => <option key={key} value={key}>{name}</option>)}
             </select>
           </label>
           <div className="flex items-end">
             <button
-              className="w-full rounded-xl bg-[#164E3F] px-4 py-3 font-semibold text-white hover:bg-[#164E3F]-strong focus-visible:outline-2 focus-visible:outline-emerald-700"
+              className="w-full rounded-xl bg-[#164E3F] px-4 py-3 font-semibold text-white hover:bg-emerald-900 focus-visible:outline-2 focus-visible:outline-emerald-700"
               type="button"
               onClick={() => {
-                setYear(String(data.budget.fiscalYear))
-                setPurpose("all")
-                setStatus("all")
+                setYear(currentYear)
+                setCategoryId('all')
+                setStatus('all')
+                setPage(1)
               }}
             >
               Limpar filtros
@@ -326,117 +297,131 @@ export default function AnalyticsDashboard() {
           </div>
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Finalidade e situação filtram solicitações; não alteram os saldos
-          globais do orçamento.
+          Ano altera todos os indicadores. Finalidade e situação filtram apenas a tabela de solicitações;
+          os gráficos mostram os totais oficiais do ano retornados pela API.
         </p>
-      </section>
-      {!activeYear ? (
-        <section className={card} role="status">
-          <h2 className="text-xl font-bold">Sem dados para {year}</h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Os dados de demonstração existem apenas para 2024. Escolha 2024
-            para visualizar o painel.
+        {categoriesQuery.isError && (
+          <p className="mt-2 text-xs text-amber-800" role="status">
+            Não foi possível carregar as finalidades cadastradas. Tente atualizar os dados.
           </p>
+        )}
+      </section>
+
+      {dashboardQuery.isPending ? (
+        <section className={card} role="status">Carregando indicadores financeiros...</section>
+      ) : dashboardQuery.isError ? (
+        <section className={card} role="alert">
+          <h2 className="text-xl font-bold">Não foi possível carregar o orçamento de {year}</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            {dashboardQuery.error instanceof Error ? dashboardQuery.error.message : 'Verifique a API e tente novamente.'}
+          </p>
+          <button className="mt-4 rounded-lg bg-[#164E3F] px-4 py-2 text-sm font-semibold text-white" onClick={() => void dashboardQuery.refetch()}>
+            Tentar novamente
+          </button>
         </section>
-      ) : (
+      ) : data ? (
         <>
-          <section
-            aria-label="Indicadores do orçamento"
-            className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"
-          >
-            {metrics.map((m) => (
-              <article key={m.label} className={card}>
+          <section aria-label="Indicadores do orçamento" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {metrics.map((metric) => (
+              <article key={metric.label} className={card}>
                 <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-sm font-semibold text-slate-500">
-                    {m.label}
-                  </h2>
-                  <span
-                    className="size-3 rounded-full"
-                    style={{ backgroundColor: m.color }}
-                  />
+                  <h2 className="text-sm font-semibold text-slate-500">{metric.label}</h2>
+                  <span className="size-3 rounded-full" style={{ backgroundColor: metric.color }} />
                 </div>
-                <p className="mt-3 break-words text-2xl font-bold tracking-tight">
-                  {currency(m.value)}
-                </p>
-                <p className="mt-2 text-xs text-slate-500">{m.detail}</p>
+                <p className="mt-3 break-words text-2xl font-bold tracking-tight">{currency(metric.value)}</p>
+                <p className="mt-2 text-xs text-slate-500">{metric.detail}</p>
               </article>
             ))}
           </section>
           <div className="grid items-start gap-5 xl:grid-cols-2">
-            <BudgetDonut
-              available={indicators.available}
-              provisioned={indicators.provisioned}
-              utilized={indicators.utilized}
-            />
+            <BudgetDonut total={annualTotal} available={available} provisioned={provisioned} utilized={utilized} />
             <HorizontalChart
               title="Pagamentos concluídos por mês"
               description="Valores realizados durante o exercício"
-              rows={monthly.map((m) => ({
-                label: m.month,
-                amount: m.amount,
-              }))}
+              rows={data.byMonth.map((month) => ({ label: month.month, amount: amountNumber(month.paid) }))}
             />
             <HorizontalChart
               title="Solicitações por finalidade"
-              description="Soma dos valores solicitados conforme os filtros"
-              rows={distribution.map((d) => ({
-                label: purposes[d.purpose],
-                amount: d.amount,
-              }))}
+              description="Principais finalidades do ano (até 5 categorias)"
+              rows={data.topCategories.map((category) => ({ label: category.name, amount: amountNumber(category.amount) }))}
             />
             <HorizontalChart
               title="Situação das solicitações"
-              description="Quantidade de pedidos por grupo de situação"
+              description="Quantidade de pedidos por situação no ano"
               valuesAreCurrency={false}
-              rows={summary.map((s) => ({
-                label: situations[s.situation],
-                amount: s.count,
-                suffix: `${s.count} pedido(s)`,
+              rows={data.requests.byStatus.map((item) => ({
+                label: statusLabels[item.status] ?? item.status,
+                amount: item.count,
+                suffix: `${item.count} pedido(s)`,
               }))}
             />
           </div>
           <section className={card}>
-            <h2 className="text-lg font-bold">
-              Solicitações encontradas: {filteredRequests.length}
-            </h2>
-            {filteredRequests.length === 0 ? (
-              <p className="mt-3 text-sm text-slate-500">
-                Nenhuma solicitação encontrada para estes filtros.
-              </p>
-            ) : (
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full min-w-[650px] text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50">
-                      <th className="p-3">Pedido</th>
-                      <th className="p-3">Solicitante</th>
-                      <th className="p-3">Finalidade</th>
-                      <th className="p-3">Situação</th>
-                      <th className="p-3 text-right">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRequests.map((r) => (
-                      <tr key={r.id} className="border-b border-slate-200">
-                        <td className="p-3 font-semibold">{r.id}</td>
-                        <td className="p-3">{r.requesterName}</td>
-                        <td className="p-3">{purposes[r.purpose]}</td>
-                        <td className="p-3">{statuses[r.status]}</td>
-                        <td className="p-3 text-right">
-                          {currency(r.requestedAmount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <h2 className="text-lg font-bold">Solicitações encontradas: {requestsQuery.data?.total ?? '...'}</h2>
+            {requestsQuery.isPending ? (
+              <p className="mt-3 text-sm text-slate-500">Carregando solicitações...</p>
+            ) : requestsQuery.isError ? (
+              <div role="alert" className="mt-3 text-sm text-rose-700">
+                Não foi possível carregar a tabela. Verifique a conexão com a API.
+                <button className="ml-3 underline" onClick={() => void requestsQuery.refetch()}>Tentar novamente</button>
               </div>
+            ) : requests.length === 0 ? (
+              <p className="mt-3 text-sm text-slate-500">Nenhuma solicitação encontrada para estes filtros.</p>
+            ) : (
+              <>
+                <div className="mt-4 overflow-x-auto">
+                  <table className="w-full min-w-[650px] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="p-3">Pedido</th>
+                        <th className="p-3">Solicitante</th>
+                        <th className="p-3">Finalidade</th>
+                        <th className="p-3">Situação</th>
+                        <th className="p-3 text-right">Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {requests.map((request) => (
+                        <tr key={request.id} className="border-b border-slate-200">
+                          <td className="p-3 font-semibold">#{request.id}</td>
+                          <td className="p-3">{request.requester.name}</td>
+                          <td className="p-3">{request.category.name}</td>
+                          <td className="p-3">{statusLabels[request.status] ?? request.status}</td>
+                          <td className="p-3 text-right">{currency(request.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {pages > 1 && (
+                  <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-sm">
+                    <button
+                      type="button"
+                      disabled={page <= 1}
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 disabled:opacity-40"
+                      onClick={() => setPage((previous) => Math.max(1, previous - 1))}
+                    >
+                      Anterior
+                    </button>
+                    <span>Página {page} de {pages}</span>
+                    <button
+                      type="button"
+                      disabled={page >= pages}
+                      className="rounded-lg border border-slate-200 bg-white px-4 py-2 disabled:opacity-40"
+                      onClick={() => setPage((previous) => previous + 1)}
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </section>
         </>
-      )}
+      ) : null}
       <p className="pb-5 text-xs text-slate-500">
-        Painel demonstrativo, sem integração com API. Pagamentos feitos em
-        outras telas ainda não atualizam estes indicadores.
+        Os valores do orçamento são fornecidos pelo backend. Atualize os dados após
+        registrar novas solicitações, provisionamentos ou pagamentos.
       </p>
     </div>
   )
