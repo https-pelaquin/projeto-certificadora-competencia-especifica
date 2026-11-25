@@ -121,7 +121,7 @@ export default function App() {
                   <Route
                     path="/analise-financeira"
                     element={
-                      <ProtectedRoute allowedRoles={['HEAD', 'FINANCIAL_ADMIN']}>
+                      <ProtectedRoute allowedPermissions={['dashboard:read']}>
                         <AnalyticsPage />
                       </ProtectedRoute>
                     }
@@ -130,7 +130,7 @@ export default function App() {
                   <Route
                     path="/relatorios"
                     element={
-                      <ProtectedRoute allowedRoles={['HEAD', 'FINANCIAL_ADMIN']}>
+                      <ProtectedRoute allowedPermissions={['reports:read']}>
                         <ReportsPage />
                       </ProtectedRoute>
                     }
