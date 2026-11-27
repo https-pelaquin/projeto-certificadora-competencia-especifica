@@ -13,7 +13,7 @@ export const createRequestCancellationSchema = (justificationRequired: boolean) 
     justification: z
       .string()
       .trim()
-      .max(1000, 'A justificativa deve ter no máximo 1000 caracteres.')
+      .max(500, 'A justificativa deve ter no máximo 500 caracteres.')
       .refine(
         (value) => !justificationRequired || value.length >= 3,
         'Informe a justificativa para cancelar uma solicitação de outro usuário.',

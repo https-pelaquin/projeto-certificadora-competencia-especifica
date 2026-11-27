@@ -1,31 +1,59 @@
 import { z } from 'zod';
 
-const moneyPattern = /^(?:\d{1,12}(?:\.\d{3})*,\d{2}|\d{1,12}(?:\.\d{1,2})?)$/;
+function normalizeMoney(value: string, allowNegative: boolean): string | null {
+  let input = value.trim().replace(/^R\$\s*/, '');
+  const negative = input.startsWith('-');
+  if (negative) input = input.slice(1);
+  if ((negative && !allowNegative) || !input || /\s/.test(input)) return null;
 
-function moneyValue(value: string) {
-  const normalized = value.includes(',')
-    ? value.replace(/\./g, '').replace(',', '.')
-    : value;
-  return Number(normalized);
+  let integer: string;
+  let fraction: string;
+  if (input.includes(',')) {
+    if (!/^(?:\d{1,12}|\d{1,3}(?:\.\d{3})+),\d{1,2}$/.test(input)) return null;
+    const parts = input.split(',');
+    integer = parts[0].replace(/\./g, '');
+    fraction = parts[1];
+  } else {
+    if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(input)) return null;
+    const parts = input.split('.');
+    integer = parts[0];
+    fraction = parts[1] ?? '';
+  }
+
+  if (integer.length > 12) return null;
+  integer = integer.replace(/^0+(?=\d)/, '');
+  const normalized = `${integer}.${fraction.padEnd(2, '0')}`;
+  return negative ? `-${normalized}` : normalized;
 }
 
 export function moneyToApi(value: string): string {
-  return moneyValue(value).toFixed(2);
+  const normalized = normalizeMoney(value, false);
+  if (normalized === null) throw new Error('Valor monetário inválido');
+  return normalized;
+}
+
+function moneyInCents(value: string): bigint {
+  const normalized = normalizeMoney(value, true);
+  if (normalized === null) return 0n;
+  const negative = normalized.startsWith('-');
+  const [integer, fraction] = normalized.replace('-', '').split('.');
+  const cents = BigInt(integer) * 100n + BigInt(fraction);
+  return negative ? -cents : cents;
 }
 
 const moneyString = z
   .string()
   .trim()
   .min(1, 'Informe o valor')
-  .regex(moneyPattern, 'Informe um valor monetário válido');
+  .refine((value) => normalizeMoney(value, true) !== null, 'Informe um valor monetário válido');
 
 const nonNegativeMoney = moneyString.refine(
-  (value) => moneyValue(value) >= 0,
+  (value) => moneyInCents(value) >= 0n,
   'O valor não pode ser negativo',
 );
 
 const positiveMoney = moneyString.refine(
-  (value) => moneyValue(value) > 0,
+  (value) => moneyInCents(value) > 0n,
   'O valor deve ser maior que zero',
 );
 

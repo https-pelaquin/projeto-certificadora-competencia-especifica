@@ -71,6 +71,13 @@ export interface RequestComplementPayload {
   message: string;
 }
 
+export interface RequestComplementResult {
+  id: number;
+  message: string;
+  createdAt: string;
+  requestStatus: RequestStatus;
+}
+
 export interface CancelOperationalRequestPayload {
   justification?: string;
 }

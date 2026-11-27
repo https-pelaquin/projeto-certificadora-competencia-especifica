@@ -66,7 +66,7 @@ export function CancelRequestDialog({
           <Textarea
             id="cancel-request-justification"
             rows={4}
-            maxLength={1000}
+            maxLength={500}
             placeholder="Informe o motivo do cancelamento..."
             aria-invalid={Boolean(form.formState.errors.justification)}
             {...form.register('justification')}
