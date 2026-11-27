@@ -42,17 +42,21 @@ const formatMoney = (value: string | null) =>
 const TERMINAL_STATUSES = new Set<RequestStatus>(['PAID', 'REJECTED', 'CANCELED']);
 
 const ACTION_LABELS: Record<string, string> = {
-  CREATED: 'Solicitação criada',
-  UPDATED: 'Solicitação atualizada',
+  REQUEST_CREATED: 'Solicitação criada',
+  REQUEST_UPDATED: 'Solicitação atualizada',
+  REQUEST_STATUS_CHANGED: 'Status da solicitação alterado',
   COMPLEMENT_REQUESTED: 'Complementação solicitada',
-  COMPLEMENTED: 'Complementação enviada',
   VOTING_OPENED: 'Votação aberta',
-  VOTING_APPROVED: 'Solicitação aprovada',
-  VOTING_REJECTED: 'Solicitação rejeitada',
-  PROVISIONED: 'Valor provisionado',
-  PAID: 'Pagamento registrado',
-  CANCELED: 'Solicitação cancelada',
+  VOTE_CAST: 'Voto registrado',
+  VOTING_CLOSED: 'Votação encerrada',
+  VOTING_TIED: 'Votação empatada',
+  TIE_BREAK_CAST: 'Voto de desempate registrado',
+  VOTING_CANCELED: 'Votação cancelada',
+  VOTING_COMMENT_ADDED: 'Comentário adicionado à votação',
+  PAYMENT_RECORDED: 'Pagamento registrado',
 };
+
+const actionLabel = (action: string) => ACTION_LABELS[action] ?? 'Ação registrada';
 
 function TimelineStatus({ status }: { status: RequestStatus | null }) {
   if (!status) return <span className="text-slate-400">Sem status</span>;
@@ -175,7 +179,7 @@ export function RequestDetailPage() {
                     <li key={`${event.at}-${event.action}-${index}`} className="relative pb-6 pl-6 last:pb-0">
                       <span className="absolute -left-1.5 top-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-600 ring-1 ring-emerald-200" />
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                        <strong className="text-sm text-slate-900">{ACTION_LABELS[event.action] ?? event.action}</strong>
+                        <strong className="text-sm text-slate-900">{actionLabel(event.action)}</strong>
                         <time className="shrink-0 text-xs text-slate-400">{formatDateTime(event.at)}</time>
                       </div>
                       <p className="mt-1 text-xs text-slate-500">{event.actor?.name ?? 'Sistema'}</p>

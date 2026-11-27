@@ -6,13 +6,14 @@ export const operationalRequestsQueryKeys = {
   all: ['requests'] as const,
   details: () => [...operationalRequestsQueryKeys.all, 'detail'] as const,
   detail: (id: number) => [...operationalRequestsQueryKeys.details(), id] as const,
-  list: (status: RequestStatus) => [...operationalRequestsQueryKeys.all, 'list', status] as const,
+  list: (status: RequestStatus, page: number, pageSize: number) =>
+    [...operationalRequestsQueryKeys.all, 'list', status, page, pageSize] as const,
 };
 
-export function useOperationalRequests(status: RequestStatus) {
+export function useOperationalRequests(status: RequestStatus, page: number, pageSize: number) {
   return useQuery({
-    queryKey: operationalRequestsQueryKeys.list(status),
-    queryFn: () => fetchOperationalRequests(status),
+    queryKey: operationalRequestsQueryKeys.list(status, page, pageSize),
+    queryFn: () => fetchOperationalRequests(status, page, pageSize),
   });
 }
 

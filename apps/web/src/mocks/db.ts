@@ -375,6 +375,14 @@ const operationalRequests: OperationalRequest[] = [
         toStatus: 'PAID',
         justification: null,
       },
+      {
+        at: '2026-08-25T16:45:00.000Z',
+        action: 'PAYMENT_RECORDED',
+        actor: { id: 3, name: initialUsers[2].name },
+        fromStatus: null,
+        toStatus: null,
+        justification: 'Desconto obtido na compra.',
+      },
     ],
   },
   {

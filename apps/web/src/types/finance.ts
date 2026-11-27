@@ -1,3 +1,5 @@
+import type { OperationalRequest } from './operational-request';
+
 export type Money = string;
 
 export interface BudgetBalance {
@@ -96,14 +98,6 @@ export interface PaymentResult {
   balance: BudgetBalance;
 }
 
-export interface ProvisionedRequest {
-  id: number;
-  status: string;
-  description: string;
-  amount: Money;
-  amounts: {
-    requested: Money;
-    provisioned: Money;
-    paid: Money | null;
-  };
-}
+export type ProvisionedRequest = Omit<OperationalRequest, 'status'> & {
+  status: 'PROVISIONED';
+};

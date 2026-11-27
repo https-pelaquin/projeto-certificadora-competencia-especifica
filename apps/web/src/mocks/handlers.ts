@@ -462,15 +462,18 @@ export const handlers = [
   // ============================================================
   http.get('/api/requests', async ({ request }) => {
     await delay(400);
-    const status = new URL(request.url).searchParams.get('status');
+    const query = new URL(request.url).searchParams;
+    const status = query.get('status');
     if (status) {
       const actor = sessionActor();
       if (!actor) return errorResponse(401, 'UNAUTHORIZED', 'Autenticação necessária');
       const visible = operationalDb.requests.filter((item) =>
         item.status === status && canAccessOperationalRequest(item, actor),
       );
+      const page = Math.max(1, Number(query.get('page')) || 1);
+      const pageSize = Math.min(100, Math.max(1, Number(query.get('pageSize')) || 50));
       return HttpResponse.json({
-        items: visible.map((item) => ({
+        items: visible.slice((page - 1) * pageSize, page * pageSize).map((item) => ({
           id: item.id,
           status: item.status,
           description: item.description,
@@ -480,8 +483,8 @@ export const handlers = [
           requester: item.requester,
           category: item.category,
         })),
-        page: 1,
-        pageSize: 100,
+        page,
+        pageSize,
         total: visible.length,
       });
     }
@@ -657,18 +660,19 @@ export const handlers = [
       return errorResponse(422, 'BUSINESS_RULE', message ? 'A mensagem pode ter no máximo 2.000 caracteres' : 'Informe o que precisa ser complementado');
     }
     const now = new Date().toISOString();
-    target.complementRequests.push({
+    const complement = {
       id: nextId(target.complementRequests),
       message,
       requestedBy: person(actor.id),
       createdAt: now,
-    });
+    };
+    target.complementRequests.push(complement);
     addTimeline(target, actor.id, 'COMPLEMENT_REQUESTED', null, null, message, now);
     if (target.status === 'AWAITING_VOTING') {
       target.status = 'AWAITING_COMPLEMENT';
       addTimeline(target, actor.id, 'REQUEST_STATUS_CHANGED', 'AWAITING_VOTING', 'AWAITING_COMPLEMENT', null, now);
     }
-    return HttpResponse.json(target, { status: 201 });
+    return HttpResponse.json({ id: complement.id, message: complement.message, createdAt: complement.createdAt, requestStatus: target.status }, { status: 201 });
   }),
 
   http.get('/api/votings', async ({ request }) => {
@@ -1013,7 +1017,7 @@ export const handlers = [
     target.amounts.provisioned = target.amount;
     target.status = 'PROVISIONED';
     addTimeline(target, actor.id, 'REQUEST_STATUS_CHANGED', 'AWAITING_BALANCE', 'PROVISIONED', null, now);
-    return HttpResponse.json({ id: target.id, status: target.status, description: target.description, amount: target.amount, amounts: target.amounts }, { status: 201 });
+    return HttpResponse.json(target);
   }),
 
   http.post('/api/requests/:id/payment', async ({ params, request }) => {
@@ -1044,6 +1048,7 @@ export const handlers = [
     target.amounts.paid = payment.paidAmount;
     target.status = 'PAID';
     addTimeline(target, actor.id, 'REQUEST_STATUS_CHANGED', 'PROVISIONED', 'PAID', null, now);
+    addTimeline(target, actor.id, 'PAYMENT_RECORDED', null, null, justification, now);
     return HttpResponse.json({ payment, balance: budget.balance }, { status: 201 });
   }),
 
